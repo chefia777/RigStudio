@@ -1,16 +1,287 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:SpriteRigStudio.Desktop.ViewModels"
+        xmlns:viewport="clr-namespace:SpriteRigStudio.Desktop.Viewport"
         x:Class="SpriteRigStudio.Desktop.Views.MainWindow"
-        Title="Sprite Rig Studio"
+        Title="{Binding Title}"
         Width="1280"
         Height="800"
         MinWidth="1024"
         MinHeight="600">
-  <Grid>
-    <TextBlock Text="Sprite Rig Studio"
-               HorizontalAlignment="Center"
-               VerticalAlignment="Center"
-               FontSize="24"
-               Foreground="{DynamicResource ThemeForegroundColor}" />
-  </Grid>
+  <DockPanel>
+    <!-- Main Menu -->
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="_File">
+        <MenuItem Header="_New Project" Command="{Binding NewProjectCommand}" />
+        <MenuItem Header="_Open Project..." Command="{Binding OpenProjectCommand}" />
+        <Separator />
+        <MenuItem Header="_Save" Command="{Binding SaveProjectCommand}" />
+        <MenuItem Header="Save _As..." Command="{Binding SaveProjectAsCommand}" />
+        <Separator />
+        <MenuItem Header="E_xit" />
+      </MenuItem>
+      <MenuItem Header="_Edit">
+        <MenuItem Header="_Undo" Command="{Binding UndoCommand}" />
+        <MenuItem Header="_Redo" Command="{Binding RedoCommand}" />
+        <Separator />
+        <MenuItem Header="Prefere_nces..." />
+      </MenuItem>
+      <MenuItem Header="_View">
+        <MenuItem Header="_Project Panel" IsChecked="True" />
+        <MenuItem Header="_Inspector Panel" IsChecked="True" />
+        <MenuItem Header="_Timeline" IsChecked="True" />
+        <Separator />
+        <MenuItem Header="Show _Skeleton" IsChecked="True" />
+        <MenuItem Header="Show A_rtwork" IsChecked="True" />
+        <MenuItem Header="Show _Masks" />
+        <MenuItem Header="Show _Guides" IsChecked="True" />
+      </MenuItem>
+      <MenuItem Header="_Project">
+        <MenuItem Header="Project _Settings..." />
+        <MenuItem Header="_Import Artwork..." />
+      </MenuItem>
+      <MenuItem Header="_Rig">
+        <MenuItem Header="_New Skeleton..." />
+        <MenuItem Header="New _Character Rig..." />
+        <MenuItem Header="New _Part..." />
+        <MenuItem Header="_Auto-Rig..." />
+      </MenuItem>
+      <MenuItem Header="_Animation">
+        <MenuItem Header="New _Animation Clip..." />
+        <MenuItem Header="_Bake Animation..." />
+      </MenuItem>
+      <MenuItem Header="_Export">
+        <MenuItem Header="New Export _Profile..." />
+        <MenuItem Header="_Export Animation..." Command="{Binding ExportAnimationCommand}" />
+        <MenuItem Header="Export _All..." Command="{Binding ExportAllCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Help">
+        <MenuItem Header="About Sprite Rig Studio" />
+      </MenuItem>
+    </Menu>
+
+    <!-- Main Toolbar -->
+    <WrapPanel DockPanel.Dock="Top" Margin="4">
+      <Button Content="New" Command="{Binding NewProjectCommand}" />
+      <Button Content="Open" Command="{Binding OpenProjectCommand}" />
+      <Button Content="Save" Command="{Binding SaveProjectCommand}" />
+      <Separator Width="8" />
+      <Button Content="Undo" Command="{Binding UndoCommand}" />
+      <Button Content="Redo" Command="{Binding RedoCommand}" />
+      <Separator Width="8" />
+      <Button Content="Select" Command="{Binding SetActiveToolCommand}" CommandParameter="Select" />
+      <Button Content="Move" Command="{Binding SetActiveToolCommand}" CommandParameter="MoveRig" />
+      <Button Content="Rotate" Command="{Binding SetActiveToolCommand}" CommandParameter="RotateRig" />
+      <Button Content="Scale" Command="{Binding SetActiveToolCommand}" CommandParameter="ScaleRig" />
+      <Separator Width="8" />
+      <Button Content="Joint" Command="{Binding SetActiveToolCommand}" CommandParameter="MoveJoint" />
+      <Button Content="BoneRot" Command="{Binding SetActiveToolCommand}" CommandParameter="RotateBone" />
+    </WrapPanel>
+
+    <!-- Main Content Area -->
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="250" MinWidth="180" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="280" MinWidth="200" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- Left: Project Panel -->
+      <Border Grid.Column="0" Grid.Row="0" BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="0,0,1,0">
+        <DockPanel>
+          <TabControl>
+            <TabItem Header="Project">
+              <ScrollViewer>
+                <StackPanel Spacing="4" Margin="8">
+                  <TextBlock FontWeight="Bold" Text="Skeletons" />
+                  <ListBox ItemsSource="{Binding ProjectPanel.Skeletons}"
+                           SelectedItem="{Binding ProjectPanel.SelectedSkeleton}"
+                           BorderThickness="0" MaxHeight="120" />
+
+                  <TextBlock FontWeight="Bold" Text="Characters" Margin="0,8,0,0" />
+                  <ListBox ItemsSource="{Binding ProjectPanel.Characters}"
+                           SelectedItem="{Binding ProjectPanel.SelectedCharacter}"
+                           BorderThickness="0" MaxHeight="120" />
+
+                  <TextBlock FontWeight="Bold" Text="Animations" Margin="0,8,0,0" />
+                  <ListBox ItemsSource="{Binding ProjectPanel.Animations}"
+                           SelectedItem="{Binding ProjectPanel.SelectedAnimation}"
+                           BorderThickness="0" MaxHeight="120" />
+
+                  <TextBlock FontWeight="Bold" Text="Export Profiles" Margin="0,8,0,0" />
+                  <ListBox ItemsSource="{Binding ProjectPanel.ExportProfiles}"
+                           SelectedItem="{Binding ProjectPanel.SelectedProfile}"
+                           BorderThickness="0" MaxHeight="120" />
+                </StackPanel>
+              </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Assets">
+              <TextBlock Text="Asset browser (coming soon)" Margin="8" />
+            </TabItem>
+          </TabControl>
+        </DockPanel>
+      </Border>
+
+      <!-- Center: Viewport -->
+      <Grid Grid.Column="1" Grid.Row="0">
+        <viewport:ViewportControl x:Name="Viewport" />
+      </Grid>
+
+      <!-- Right: Inspector Panel -->
+      <Border Grid.Column="2" Grid.Row="0" BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1,0,0,0">
+        <ScrollViewer>
+          <StackPanel Spacing="8" Margin="8">
+
+            <!-- Transform Section -->
+            <Expander Header="Transform" IsExpanded="True">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="80" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Pos X" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.PositionX}" Grid.Row="0" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Pos Y" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.PositionY}" Grid.Row="1" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Rotation" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.Rotation}" Grid.Row="2" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Scale X" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.ScaleX}" Grid.Row="3" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Scale Y" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.ScaleY}" Grid.Row="4" Grid.Column="1" Margin="0,2" />
+              </Grid>
+            </Expander>
+
+            <!-- Bone Section -->
+            <Expander Header="Bone" IsExpanded="True">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="80" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Bone" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.SelectedBoneName}" Grid.Row="0" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
+                <TextBlock Text="Role" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.BoneRole}" Grid.Row="1" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
+                <TextBlock Text="Length" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.BoneLength}" Grid.Row="2" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
+              </Grid>
+            </Expander>
+
+            <!-- Part Section -->
+            <Expander Header="Part" IsExpanded="True">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="80" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Part" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.SelectedPartName}" Grid.Row="0" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
+                <TextBlock Text="Bone" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.BoundBone}" Grid.Row="1" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
+                <TextBlock Text="Order" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.RenderOrder}" Grid.Row="2" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Pivot X" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.PivotX}" Grid.Row="3" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Pivot Y" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.PivotY}" Grid.Row="4" Grid.Column="1" Margin="0,2" />
+              </Grid>
+            </Expander>
+
+            <!-- Animation Section -->
+            <Expander Header="Animation" IsExpanded="False">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="80" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Time" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.CurrentTime}" Grid.Row="0" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Duration" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.Duration}" Grid.Row="1" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="FPS" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.FPS}" Grid.Row="2" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Loop" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.LoopMode}" Grid.Row="3" Grid.Column="1" Margin="0,2" />
+                <TextBlock Text="Interp." Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Inspector.InterpolationMode}" Grid.Row="4" Grid.Column="1" Margin="0,2" />
+              </Grid>
+            </Expander>
+
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+
+      <!-- Timeline and Playback Controls -->
+      <Border Grid.ColumnSpan="3" Grid.Row="1" BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="0,1,0,0" Height="80">
+        <DockPanel>
+          <!-- Playback Controls -->
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,4" Spacing="4">
+            <Button Content="|&lt;" Width="28" Height="24" ToolTip.Tip="Jump to Start" />
+            <Button Content="&lt;&lt;" Width="28" Height="24" ToolTip.Tip="Previous Frame" />
+            <Button Content="&gt;" Width="28" Height="24" Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play / Pause" />
+            <Button Content="[]" Width="28" Height="24" Command="{Binding StopCommand}" ToolTip.Tip="Stop" />
+            <Button Content="&gt;&gt;" Width="28" Height="24" ToolTip.Tip="Next Frame" />
+            <Button Content="&gt;|" Width="28" Height="24" ToolTip.Tip="Jump to End" />
+            <Separator Width="8" />
+            <TextBlock Text="{Binding CurrentTime}" VerticalAlignment="Center" />
+            <TextBlock Text="/" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ActiveAnimationDuration}" VerticalAlignment="Center" />
+          </StackPanel>
+
+          <!-- Timeline Track -->
+          <Border DockPanel.Dock="Bottom" Margin="8,0,8,8" BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1">
+            <Canvas Background="{DynamicResource ThemeControlLowBrush}">
+              <!-- Timeline content will be rendered here -->
+            </Canvas>
+          </Border>
+        </DockPanel>
+      </Border>
+
+    </Grid>
+
+    <!-- Status Bar -->
+    <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="0,1,0,0" Padding="8,2">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" VerticalAlignment="Center" />
+        <Separator Grid.Column="1" Width="8" />
+        <TextBlock Grid.Column="2" Text="{Binding ActiveProject.Name}" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+  </DockPanel>
 </Window>
