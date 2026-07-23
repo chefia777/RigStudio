@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -21,7 +20,7 @@ namespace SpriteRigStudio.Desktop.Viewport;
 /// Uses Avalonia DrawingContext for rendering. SkiaSharp is used only in the
 /// Rendering layer for export and mask rasterization.
 /// </summary>
-public class ViewportControl : TemplatedControl
+public class ViewportControl : Control
 {
     private readonly ToolManager _toolManager;
     private bool _isPanning;
@@ -197,7 +196,6 @@ public class ViewportControl : TemplatedControl
         ClipToBounds = true;
         HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
-        Background = Brushes.DimGray;
     }
 
     public Point ScreenToWorld(Point screen)
@@ -290,39 +288,30 @@ public class ViewportControl : TemplatedControl
     {
         base.Render(context);
         var bounds = Bounds;
+
+        // Always draw a visible background
+        context.FillRectangle(Brushes.DimGray, bounds);
+
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
-        using (context.PushTransform(Matrix.CreateTranslation(bounds.Width / 2 + _panX, bounds.Height / 2 + _panY)))
-        using (context.PushTransform(Matrix.CreateScale(_zoom, -_zoom)))
+        try
         {
-            // Apply visual tool feedback transforms in world space.
-            // Tools update DragOffsetX/Y (screen pixels), ActiveRotation, ActiveScale.
-            // Convert screen deltas to world coords: divide by zoom, negate Y axis.
-            double visualDx = _dragOffsetX / _zoom;
-            double visualDy = -_dragOffsetY / _zoom;
-            bool hasVisualOffset = Math.Abs(visualDx) > 0.001 || Math.Abs(visualDy) > 0.001 ||
-                                   Math.Abs(_activeRotation) > 0.001 ||
-                                   Math.Abs(_activeScale - 1.0) > 0.001;
-
-            // Draw artwork first (background layer)
-            DrawArtwork(context);
-
-            if (hasVisualOffset)
+            using (context.PushTransform(Matrix.CreateTranslation(bounds.Width / 2 + _panX, bounds.Height / 2 + _panY)))
+            using (context.PushTransform(Matrix.CreateScale(_zoom, -_zoom)))
             {
-                // Order: translate, rotate, scale (TRS) — applied right-to-left
-                using (context.PushTransform(Matrix.CreateTranslation(visualDx, visualDy)))
-                using (context.PushTransform(Matrix.CreateRotation(_activeRotation * Math.PI / 180.0)))
-                using (context.PushTransform(Matrix.CreateScale(_activeScale, _activeScale)))
-                {
-                    if (_showGuides) DrawGuides(context);
-                    if (_showSkeleton) DrawSkeleton(context);
-                }
-            }
-            else
-            {
+                // Draw artwork first (background layer)
+                DrawArtwork(context);
+
+                // Draw guides
                 if (_showGuides) DrawGuides(context);
+
+                // Draw skeleton
                 if (_showSkeleton) DrawSkeleton(context);
             }
+        }
+        catch
+        {
+            // Silently handle render errors — background already drawn
         }
     }
 
