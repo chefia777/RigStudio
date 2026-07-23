@@ -194,6 +194,8 @@ public class ViewportControl : Control
         _toolManager = new ToolManager();
         Focusable = true;
         ClipToBounds = true;
+        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
     }
 
     public Point ScreenToWorld(Point screen)
