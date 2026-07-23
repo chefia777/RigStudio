@@ -1,11 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Windows.Input;
 using Avalonia.Platform.Storage;
 using ReactiveUI;
+using SpriteRigStudio.Application.Abstractions;
 using SpriteRigStudio.Application.Animations;
 using SpriteRigStudio.Application.Exporting;
 using SpriteRigStudio.Application.Projects;
@@ -46,6 +46,7 @@ public class MainWindowViewModel : ReactiveObject
     private readonly IImageEncoder _imageEncoder;
     private readonly IImageDecoder _imageDecoder;
     private readonly ProjectSerializer _projectSerializer;
+    private readonly IProjectRepository _projectRepository;
 
     // --- Active workspace ---
     private string _activeWorkspace = "Project";
@@ -67,6 +68,7 @@ public class MainWindowViewModel : ReactiveObject
     private double _currentTime;
     private bool _isPlaying;
     private IDisposable? _playbackSubscription;
+    private IDisposable? _autosaveSubscription;
     private readonly Stack<(string description, Action undo, Action redo)> _undoStack = new();
     private readonly Stack<(string description, Action undo, Action redo)> _redoStack = new();
     // --- Panel view models ---
@@ -87,7 +89,8 @@ public class MainWindowViewModel : ReactiveObject
         SpritesheetComposer spritesheetComposer,
         IImageEncoder imageEncoder,
         IImageDecoder imageDecoder,
-        ProjectSerializer projectSerializer)
+        ProjectSerializer projectSerializer,
+        IProjectRepository projectRepository)
     {
         _projectService = projectService;
         _skeletonService = skeletonService;
@@ -101,6 +104,7 @@ public class MainWindowViewModel : ReactiveObject
         _imageEncoder = imageEncoder;
         _imageDecoder = imageDecoder;
         _projectSerializer = projectSerializer;
+        _projectRepository = projectRepository;
 
         _projectPanel = new ProjectPanelViewModel();
         _inspector = new InspectorViewModel();
@@ -125,6 +129,16 @@ public class MainWindowViewModel : ReactiveObject
         NextFrameCommand = ReactiveCommand.Create(NextFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
         GoToStartCommand = ReactiveCommand.Create(GoToStart);
         GoToEndCommand = ReactiveCommand.Create(GoToEnd, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
+
+        // Autosave timer — ticks every 60 seconds when the project is dirty
+        _autosaveSubscription = Observable.Interval(TimeSpan.FromSeconds(60))
+            .Where(_ => _isDirty && _activeProject != null && !string.IsNullOrEmpty(_activeProject.ProjectDirectory))
+            .Subscribe(async _ =>
+            {
+                var result = await _projectRepository.AutosaveAsync(_activeProject!);
+                if (result.IsSuccess)
+                    StatusMessage = "Autosaved.";
+            });
 
         // Playback timer — ticks at ~60 FPS when an animation is playing
         _playbackSubscription = Observable.Interval(TimeSpan.FromMilliseconds(1000.0 / 60.0))
