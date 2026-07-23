@@ -1,11 +1,16 @@
+using System;
 using Avalonia;
 using Avalonia.Input;
 using SpriteRigStudio.Desktop.Viewport;
+using SpriteRigStudio.Domain.Geometry;
+using SpriteRigStudio.Domain.Rigs;
 
 namespace SpriteRigStudio.Desktop.Tools;
 
 /// <summary>
 /// Tool for translating the entire character rig in the viewport.
+/// Provides visual feedback via DragOffsetX/Y and commits the new
+/// transform through <see cref="ViewportControl.OnApplyRigTransform"/>.
 /// </summary>
 public class MoveRigTool : ITool
 {
@@ -33,11 +38,11 @@ public class MoveRigTool : ITool
             var current = e.GetPosition(viewport);
             var delta = current - _lastPosition;
 
-            viewport.PanX += delta.X;
-            viewport.PanY += delta.Y;
+            // Update visual offset (screen-space delta)
+            viewport.DragOffsetX += delta.X;
+            viewport.DragOffsetY += delta.Y;
 
             _lastPosition = current;
-            viewport.InvalidateVisual();
             e.Handled = true;
         }
     }
@@ -47,6 +52,26 @@ public class MoveRigTool : ITool
         if (_isDragging)
         {
             _isDragging = false;
+
+            var currentTransform = viewport.CurrentSetupTransform;
+            if (currentTransform != null && viewport.OnApplyRigTransform != null)
+            {
+                // Convert screen-space drag delta to world-space delta
+                double worldDx = viewport.DragOffsetX / viewport.Zoom;
+                double worldDy = -viewport.DragOffsetY / viewport.Zoom;
+
+                var newTransform = currentTransform.Clone();
+                newTransform.Position = new Vector2D(
+                    currentTransform.Position.X + worldDx,
+                    currentTransform.Position.Y + worldDy);
+
+                // Fire-and-forget the async callback
+                _ = viewport.OnApplyRigTransform.Invoke(newTransform);
+            }
+
+            // Reset visual offset
+            viewport.DragOffsetX = 0;
+            viewport.DragOffsetY = 0;
             e.Handled = true;
         }
     }

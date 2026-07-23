@@ -66,10 +66,14 @@ public class MainWindowViewModel : ReactiveObject
     private string _statusMessage = "Ready";
     private double _currentTime;
     private bool _isPlaying;
-
+    private IDisposable? _playbackSubscription;
+    private readonly Stack<(string description, Action undo, Action redo)> _undoStack = new();
+    private readonly Stack<(string description, Action undo, Action redo)> _redoStack = new();
     // --- Panel view models ---
+
     private readonly ProjectPanelViewModel _projectPanel;
     private readonly InspectorViewModel _inspector;
+    private bool _isSyncingInspector;
 
     public MainWindowViewModel(
         ProjectService projectService,
@@ -101,6 +105,9 @@ public class MainWindowViewModel : ReactiveObject
         _projectPanel = new ProjectPanelViewModel();
         _inspector = new InspectorViewModel();
 
+        // React to inspector property changes (user edits values) → sync back to character
+        _inspector.PropertyChanged += OnInspectorPropertyChanged;
+
         // Initialize commands
         NewProjectCommand = ReactiveCommand.CreateFromTask(NewProjectAsync);
         OpenProjectCommand = ReactiveCommand.CreateFromTask(OpenProjectAsync);
@@ -114,6 +121,30 @@ public class MainWindowViewModel : ReactiveObject
         ExportAllCommand = ReactiveCommand.CreateFromTask(ExportAllAsync);
         SwitchWorkspaceCommand = ReactiveCommand.Create<string>(SwitchWorkspace);
         SetActiveToolCommand = ReactiveCommand.Create<string>(SetActiveTool);
+        PreviousFrameCommand = ReactiveCommand.Create(PreviousFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
+        NextFrameCommand = ReactiveCommand.Create(NextFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
+        GoToStartCommand = ReactiveCommand.Create(GoToStart);
+        GoToEndCommand = ReactiveCommand.Create(GoToEnd, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
+
+        // Playback timer — ticks at ~60 FPS when an animation is playing
+        _playbackSubscription = Observable.Interval(TimeSpan.FromMilliseconds(1000.0 / 60.0))
+            .Where(_ => _isPlaying && _activeAnimation != null)
+            .Subscribe(_ =>
+            {
+                var delta = 1.0 / 60.0;
+                CurrentTime += delta;
+                if (_activeAnimation != null && CurrentTime >= _activeAnimation.DurationSeconds)
+                {
+                    if (_activeAnimation.LoopMode == LoopMode.Loop || _activeAnimation.LoopMode == LoopMode.PingPong)
+                        CurrentTime = 0;
+                    else
+                    {
+                        CurrentTime = _activeAnimation.DurationSeconds;
+                        IsPlaying = false;
+                    }
+                }
+                EvaluateAnimationPoseAtCurrentTime();
+            });
 
         // React to project panel selection changes
         _projectPanel.PropertyChanged += (s, e) =>
@@ -174,6 +205,7 @@ public class MainWindowViewModel : ReactiveObject
             {
                 CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(skeleton, character);
             }
+            SyncInspectorFromCharacter();
             StatusMessage = $"Selected character: {character.Name}";
         }
     }
@@ -328,6 +360,10 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand ExportAllCommand { get; }
     public ICommand SwitchWorkspaceCommand { get; }
     public ICommand SetActiveToolCommand { get; }
+    public ICommand PreviousFrameCommand { get; }
+    public ICommand NextFrameCommand { get; }
+    public ICommand GoToStartCommand { get; }
+    public ICommand GoToEndCommand { get; }
 
     /// <summary>Title displayed in the window title bar.</summary>
     public string Title
@@ -484,14 +520,30 @@ public class MainWindowViewModel : ReactiveObject
 
     private void Undo()
     {
-        // TODO: Implement undo stack
-        StatusMessage = "Undo";
+        if (_undoStack.Count > 0)
+        {
+            var (description, undo, redo) = _undoStack.Pop();
+            undo();
+            _redoStack.Push((description, undo, redo));
+            CanUndo = _undoStack.Count > 0;
+            CanRedo = _redoStack.Count > 0;
+            StatusMessage = $"Undo: {description}";
+            RefreshPose();
+        }
     }
 
     private void Redo()
     {
-        // TODO: Implement redo stack
-        StatusMessage = "Redo";
+        if (_redoStack.Count > 0)
+        {
+            var (description, undo, redo) = _redoStack.Pop();
+            redo();
+            _undoStack.Push((description, undo, redo));
+            CanUndo = _undoStack.Count > 0;
+            CanRedo = _redoStack.Count > 0;
+            StatusMessage = $"Redo: {description}";
+            RefreshPose();
+        }
     }
 
     private void PlayPause()
@@ -504,7 +556,72 @@ public class MainWindowViewModel : ReactiveObject
     {
         IsPlaying = false;
         CurrentTime = 0;
+        EvaluateAnimationPoseAtCurrentTime();
         StatusMessage = "Stopped";
+    }
+
+    private void GoToStart()
+    {
+        CurrentTime = 0;
+        EvaluateAnimationPoseAtCurrentTime();
+    }
+
+    private void GoToEnd()
+    {
+        if (_activeAnimation != null)
+        {
+            CurrentTime = _activeAnimation.DurationSeconds;
+            EvaluateAnimationPoseAtCurrentTime();
+        }
+    }
+
+    private void PreviousFrame()
+    {
+        if (_activeAnimation == null) return;
+        var fps = _activeAnimation.FramesPerSecond;
+        var frameDuration = 1.0 / fps;
+        CurrentTime = Math.Max(0, _currentTime - frameDuration);
+        EvaluateAnimationPoseAtCurrentTime();
+    }
+
+    private void NextFrame()
+    {
+        if (_activeAnimation == null) return;
+        var fps = _activeAnimation.FramesPerSecond;
+        var frameDuration = 1.0 / fps;
+        CurrentTime = Math.Min(_activeAnimation.DurationSeconds, _currentTime + frameDuration);
+        EvaluateAnimationPoseAtCurrentTime();
+    }
+
+    private void EvaluateAnimationPoseAtCurrentTime()
+    {
+        if (_activeProject == null || _activeCharacter == null || _activeAnimation == null) return;
+        if (!_activeProject.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var skeleton)) return;
+        CurrentPose = _rigPoseEvaluator.EvaluateAnimationPose(skeleton, _activeCharacter, _activeAnimation, _currentTime);
+    }
+
+    public void ExecuteAction(string description, Action undo, Action redo)
+    {
+        redo();
+        _undoStack.Push((description, undo, redo));
+        _redoStack.Clear();
+        CanUndo = _undoStack.Count > 0;
+        CanRedo = false;
+        MarkDirty();
+    }
+
+    private void RefreshPose()
+    {
+        EvaluateAnimationPoseAtCurrentTime();
+    }
+
+    public void MarkDirty()
+    {
+        if (!_isDirty)
+        {
+            IsDirty = true;
+            this.RaisePropertyChanged(nameof(Title));
+        }
     }
 
     private async Task ExportAnimationAsync()
@@ -676,6 +793,111 @@ public class MainWindowViewModel : ReactiveObject
             GroundAnchor = skeleton.DefaultGroundAnchor
         };
         CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(skeleton, rig);
+    }
+
+    // ── Tool integration ──────────────────────────────────────────
+
+    /// <summary>
+    /// Re-evaluates the current character's setup pose and updates the viewport.
+    /// </summary>
+    public async Task RefreshPoseAsync()
+    {
+        if (_activeProject != null && _activeCharacter != null &&
+            _activeProject.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var skeleton))
+        {
+            CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(skeleton, _activeCharacter);
+        }
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Applies a new setup transform to the active character (called from rig tools).
+    /// </summary>
+    public async Task ApplyRigTransformAsync(CharacterSetupTransform transform)
+    {
+        if (_activeCharacter != null)
+        {
+            _rigService.UpdateSetupTransform(_activeCharacter, transform);
+            MarkDirty();
+            await RefreshPoseAsync();
+            SyncInspectorFromCharacter();
+        }
+    }
+
+    /// <summary>
+    /// Applies a new bone setup override to the active character (called from bone tools).
+    /// </summary>
+    public async Task ApplyBoneOverrideAsync(BoneId boneId, BoneSetupOverride override_)
+    {
+        if (_activeCharacter != null)
+        {
+            _rigService.UpdateBoneSetup(_activeCharacter, boneId, override_);
+            MarkDirty();
+            await RefreshPoseAsync();
+            SyncInspectorFromCharacter();
+        }
+    }
+
+    /// <summary>
+    /// Syncs the inspector panel values from the active character's setup transform.
+    /// </summary>
+    public void SyncInspectorFromCharacter()
+    {
+        if (_isSyncingInspector) return;
+        _isSyncingInspector = true;
+        try
+        {
+            if (_activeCharacter != null)
+            {
+                var t = _activeCharacter.SetupTransform;
+                _inspector.PositionX = t.Position.X;
+                _inspector.PositionY = t.Position.Y;
+                _inspector.Rotation = t.RotationDegrees;
+                _inspector.ScaleX = t.UniformScale;
+                _inspector.ScaleY = t.UniformScale;
+            }
+        }
+        finally
+        {
+            _isSyncingInspector = false;
+        }
+    }
+
+    /// <summary>
+    /// Handles inspector property changes (user edits) by writing back
+    /// to the active character and refreshing the pose.
+    /// </summary>
+    private void OnInspectorPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_isSyncingInspector || _activeCharacter == null) return;
+        _isSyncingInspector = true;
+        try
+        {
+            var t = _activeCharacter.SetupTransform;
+            switch (e.PropertyName)
+            {
+                case nameof(InspectorViewModel.PositionX):
+                    t.Position = new Vector2D(_inspector.PositionX, t.Position.Y);
+                    break;
+                case nameof(InspectorViewModel.PositionY):
+                    t.Position = new Vector2D(t.Position.X, _inspector.PositionY);
+                    break;
+                case nameof(InspectorViewModel.Rotation):
+                    t.RotationDegrees = _inspector.Rotation;
+                    break;
+                case nameof(InspectorViewModel.ScaleX):
+                case nameof(InspectorViewModel.ScaleY):
+                    t.UniformScale = (_inspector.ScaleX + _inspector.ScaleY) / 2.0;
+                    break;
+            }
+            _activeCharacter.SetupTransform = t;
+            MarkDirty();
+            _ = RefreshPoseAsync();
+        }
+        finally
+        {
+            _isSyncingInspector = false;
+        }
     }
 
     private static string GetDefaultProjectDirectory()

@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using SpriteRigStudio.Desktop.Tools;
+using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Geometry;
 using SpriteRigStudio.Domain.Retargeting;
+using SpriteRigStudio.Domain.Rigs;
 
 namespace SpriteRigStudio.Desktop.Viewport;
 
@@ -31,15 +34,80 @@ public class ViewportControl : Control
     private EvaluatedPose? _evaluatedPose;
     private string _activeTool = "Select";
 
-    // Properties used by tool implementations
-    public double DragOffsetX { get; set; }
-    public double DragOffsetY { get; set; }
+    // ── Callbacks wired by MainWindow code-behind ──────────────────────
+
+    /// <summary>
+    /// Called when a rig transform tool completes (move, rotate, scale).
+    /// Receives the final <see cref="CharacterSetupTransform"/> to apply to the active character.
+    /// </summary>
+    public Func<CharacterSetupTransform, Task>? OnApplyRigTransform { get; set; }
+
+    /// <summary>
+    /// Called when a bone-level tool completes (move joint, rotate bone).
+    /// Receives the bone ID and the final <see cref="BoneSetupOverride"/> to apply.
+    /// </summary>
+    public Func<BoneId, BoneSetupOverride, Task>? OnApplyBoneOverride { get; set; }
+
+    // ── Tool-accessible state set by MainWindow code-behind ────────────
+
+    /// <summary>The active character's current setup transform (read by move/rotate/scale tools).</summary>
+    public CharacterSetupTransform? CurrentSetupTransform { get; set; }
+
+    /// <summary>The currently selected bone (used by bone-level tools).</summary>
+    public BoneId? SelectedBoneId { get; set; }
+
+    /// <summary>Current bone override position offset before a drag begins.</summary>
+    public Vector2D? CurrentBoneOverridePosition { get; set; }
+
+    /// <summary>Current bone override rotation offset before a drag begins.</summary>
+    public double? CurrentBoneOverrideRotation { get; set; }
+
+    // ── Properties used by tool implementations (auto-invalidate) ─────
+
+    private double _dragOffsetX;
+    private double _dragOffsetY;
+    private double _activeRotation;
+    private double _activeScale = 1.0;
+    private double _activeBoneRotation;
+
+    /// <summary>Screen-space X offset for visual drag feedback.</summary>
+    public double DragOffsetX
+    {
+        get => _dragOffsetX;
+        set { _dragOffsetX = value; InvalidateVisual(); }
+    }
+
+    /// <summary>Screen-space Y offset for visual drag feedback.</summary>
+    public double DragOffsetY
+    {
+        get => _dragOffsetY;
+        set { _dragOffsetY = value; InvalidateVisual(); }
+    }
+
     public Point SelectionStart { get; set; }
     public Point SelectionEnd { get; set; }
     public bool ShowSelectionRect { get; set; }
-    public double ActiveRotation { get; set; }
-    public double ActiveScale { get; set; } = 1.0;
-    public double ActiveBoneRotation { get; set; }
+
+    /// <summary>Visual rotation angle in degrees applied during a rotate drag.</summary>
+    public double ActiveRotation
+    {
+        get => _activeRotation;
+        set { _activeRotation = value; InvalidateVisual(); }
+    }
+
+    /// <summary>Visual uniform scale factor applied during a scale drag.</summary>
+    public double ActiveScale
+    {
+        get => _activeScale;
+        set { _activeScale = value; InvalidateVisual(); }
+    }
+
+    /// <summary>Visual bone rotation angle in degrees during a bone rotate drag.</summary>
+    public double ActiveBoneRotation
+    {
+        get => _activeBoneRotation;
+        set { _activeBoneRotation = value; InvalidateVisual(); }
+    }
 
     public double Zoom { get => _zoom; set { _zoom = Math.Clamp(value, 0.05, 20.0); InvalidateVisual(); } }
     public double PanX { get => _panX; set { _panX = value; InvalidateVisual(); } }
@@ -53,9 +121,52 @@ public class ViewportControl : Control
     public Point? GetSelectedJointScreenPosition() => null;
 
     /// <summary>Commits a joint movement as a single undoable action.</summary>
-    public void CommitJointMovement() { }
+    public void CommitJointMovement()
+    {
+        if (OnApplyBoneOverride != null && SelectedBoneId.HasValue)
+        {
+            var worldDx = _dragOffsetX / _zoom;
+            var worldDy = -_dragOffsetY / _zoom;
+            var currentPos = CurrentBoneOverridePosition ?? Vector2D.Zero;
+            var currentRot = CurrentBoneOverrideRotation ?? 0;
+
+            var override_ = new BoneSetupOverride
+            {
+                BoneId = SelectedBoneId.Value,
+                LocalPosition = new Vector2D(currentPos.X + worldDx, currentPos.Y + worldDy),
+                LocalRotationDegrees = currentRot + _activeBoneRotation,
+                LocalScale = new Vector2D(1, 1),
+                Enabled = true
+            };
+            OnApplyBoneOverride(SelectedBoneId.Value, override_);
+        }
+        _dragOffsetX = 0;
+        _dragOffsetY = 0;
+        _activeBoneRotation = 0;
+        InvalidateVisual();
+    }
+
     /// <summary>Commits a bone rotation as a single undoable action.</summary>
-    public void CommitBoneRotation() { }
+    public void CommitBoneRotation()
+    {
+        if (OnApplyBoneOverride != null && SelectedBoneId.HasValue)
+        {
+            var currentRot = CurrentBoneOverrideRotation ?? 0;
+            var currentPos = CurrentBoneOverridePosition ?? Vector2D.Zero;
+
+            var override_ = new BoneSetupOverride
+            {
+                BoneId = SelectedBoneId.Value,
+                LocalPosition = currentPos,
+                LocalRotationDegrees = currentRot + _activeBoneRotation,
+                LocalScale = new Vector2D(1, 1),
+                Enabled = true
+            };
+            OnApplyBoneOverride(SelectedBoneId.Value, override_);
+        }
+        _activeBoneRotation = 0;
+        InvalidateVisual();
+    }
 
     public ViewportControl()
     {
@@ -161,8 +272,31 @@ public class ViewportControl : Control
         using (context.PushTransform(Matrix.CreateTranslation(bounds.Width / 2 + _panX, bounds.Height / 2 + _panY)))
         using (context.PushTransform(Matrix.CreateScale(_zoom, -_zoom)))
         {
-            if (_showGuides) DrawGuides(context);
-            if (_showSkeleton) DrawSkeleton(context);
+            // Apply visual tool feedback transforms in world space.
+            // Tools update DragOffsetX/Y (screen pixels), ActiveRotation, ActiveScale.
+            // Convert screen deltas to world coords: divide by zoom, negate Y axis.
+            double visualDx = _dragOffsetX / _zoom;
+            double visualDy = -_dragOffsetY / _zoom;
+            bool hasVisualOffset = Math.Abs(visualDx) > 0.001 || Math.Abs(visualDy) > 0.001 ||
+                                   Math.Abs(_activeRotation) > 0.001 ||
+                                   Math.Abs(_activeScale - 1.0) > 0.001;
+
+            if (hasVisualOffset)
+            {
+                // Order: translate, rotate, scale (TRS) — applied right-to-left
+                using (context.PushTransform(Matrix.CreateTranslation(visualDx, visualDy)))
+                using (context.PushTransform(Matrix.CreateRotation(_activeRotation * Math.PI / 180.0)))
+                using (context.PushTransform(Matrix.CreateScale(_activeScale, _activeScale)))
+                {
+                    if (_showGuides) DrawGuides(context);
+                    if (_showSkeleton) DrawSkeleton(context);
+                }
+            }
+            else
+            {
+                if (_showGuides) DrawGuides(context);
+                if (_showSkeleton) DrawSkeleton(context);
+            }
         }
     }
 

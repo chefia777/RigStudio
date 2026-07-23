@@ -57,6 +57,16 @@ public class ScaleRigTool : ITool
         if (_isDragging)
         {
             _isDragging = false;
+
+            var currentTransform = viewport.CurrentSetupTransform;
+            if (currentTransform != null && viewport.OnApplyRigTransform != null)
+            {
+                var newTransform = currentTransform.Clone();
+                newTransform.UniformScale = viewport.ActiveScale;
+                _ = viewport.OnApplyRigTransform.Invoke(newTransform);
+            }
+
+            viewport.ActiveScale = 1.0;
             e.Handled = true;
         }
     }

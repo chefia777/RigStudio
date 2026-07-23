@@ -49,6 +49,16 @@ public class RotateRigTool : ITool
         if (_isDragging)
         {
             _isDragging = false;
+
+            var currentTransform = viewport.CurrentSetupTransform;
+            if (currentTransform != null && viewport.OnApplyRigTransform != null)
+            {
+                var newTransform = currentTransform.Clone();
+                newTransform.RotationDegrees = viewport.ActiveRotation;
+                _ = viewport.OnApplyRigTransform.Invoke(newTransform);
+            }
+
+            viewport.ActiveRotation = 0;
             e.Handled = true;
         }
     }

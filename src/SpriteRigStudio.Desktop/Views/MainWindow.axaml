@@ -247,12 +247,12 @@
         <DockPanel>
           <!-- Playback Controls -->
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,4" Spacing="4">
-            <Button Content="|&lt;" Width="28" Height="24" ToolTip.Tip="Jump to Start" />
-            <Button Content="&lt;&lt;" Width="28" Height="24" ToolTip.Tip="Previous Frame" />
+            <Button Content="|&lt;" Width="28" Height="24" Command="{Binding GoToStartCommand}" ToolTip.Tip="Jump to Start" />
+            <Button Content="&lt;&lt;" Width="28" Height="24" Command="{Binding PreviousFrameCommand}" ToolTip.Tip="Previous Frame" />
             <Button Content="&gt;" Width="28" Height="24" Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play / Pause" />
             <Button Content="[]" Width="28" Height="24" Command="{Binding StopCommand}" ToolTip.Tip="Stop" />
-            <Button Content="&gt;&gt;" Width="28" Height="24" ToolTip.Tip="Next Frame" />
-            <Button Content="&gt;|" Width="28" Height="24" ToolTip.Tip="Jump to End" />
+            <Button Content="&gt;&gt;" Width="28" Height="24" Command="{Binding NextFrameCommand}" ToolTip.Tip="Next Frame" />
+            <Button Content="&gt;|" Width="28" Height="24" Command="{Binding GoToEndCommand}" ToolTip.Tip="Jump to End" />
             <Separator Width="8" />
             <TextBlock Text="{Binding CurrentTime}" VerticalAlignment="Center" />
             <TextBlock Text="/" VerticalAlignment="Center" />

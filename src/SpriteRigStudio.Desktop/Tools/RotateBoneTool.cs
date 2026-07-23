@@ -71,5 +71,7 @@ public class RotateBoneTool : ITool
     public void Cancel()
     {
         _isDragging = false;
+        _lastPosition = default;
+        _startBoneRotation = 0;
     }
 }
