@@ -62,24 +62,24 @@ public class ProjectValidator
             return;
         }
 
-        if (!skeleton.Bones.ContainsKey(skeleton.RootBoneId))
+        if (!skeleton.Bones.ContainsKey(skeleton.RootBoneId.ToKeyString()))
             result.AddError("SKELETON_MISSING_ROOT", $"Skeleton '{skeleton.Name}' is missing its root bone.", skeleton.SkeletonId.ToString());
 
         if (skeleton.HasCycles())
             result.AddError("SKELETON_CYCLE", $"Skeleton '{skeleton.Name}' contains cycles.", skeleton.SkeletonId.ToString());
 
         // Check for missing parents
-        foreach (var (boneId, bone) in skeleton.Bones)
+        foreach (var (boneKey, bone) in skeleton.Bones)
         {
-            if (bone.ParentBoneId.HasValue && !skeleton.Bones.ContainsKey(bone.ParentBoneId.Value))
+            if (bone.ParentBoneId.HasValue && !skeleton.Bones.ContainsKey(bone.ParentBoneId.Value.ToKeyString()))
                 result.AddError("BONE_MISSING_PARENT",
                     $"Bone '{bone.Name}' references missing parent bone {bone.ParentBoneId}.",
-                    boneId.ToString());
+                    boneKey);
 
             if (bone.ReferenceLength <= 0)
                 result.AddError("BONE_INVALID_LENGTH",
                     $"Bone '{bone.Name}' has invalid length {bone.ReferenceLength}.",
-                    boneId.ToString());
+                    boneKey);
         }
     }
 
@@ -88,7 +88,7 @@ public class ProjectValidator
         if (string.IsNullOrWhiteSpace(character.Name))
             result.AddError("CHARACTER_NO_NAME", "Character rig must have a name.", character.CharacterRigId.ToString());
 
-        if (!project.Skeletons.ContainsKey(character.SkeletonId))
+        if (!project.Skeletons.ContainsKey(character.SkeletonId.ToKeyString()))
             result.AddWarning("CHARACTER_MISSING_SKELETON",
                 $"Character '{character.Name}' references skeleton {character.SkeletonId} that is not in the project.",
                 character.CharacterRigId.ToString());
@@ -103,15 +103,15 @@ public class ProjectValidator
         }
 
         // Check for parts bound to missing bones
-        foreach (var (partId, part) in character.SpriteParts)
+        foreach (var (partKey, part) in character.SpriteParts)
         {
             if (part.BoundBoneId.HasValue)
             {
-                var skeleton = project.Skeletons.GetValueOrDefault(character.SkeletonId);
-                if (skeleton != null && !skeleton.Bones.ContainsKey(part.BoundBoneId.Value))
+                var skeleton = project.Skeletons.GetValueOrDefault(character.SkeletonId.ToKeyString());
+                if (skeleton != null && !skeleton.Bones.ContainsKey(part.BoundBoneId.Value.ToKeyString()))
                     result.AddError("PART_BOUND_TO_MISSING_BONE",
                         $"Part '{part.Name}' is bound to bone {part.BoundBoneId} which does not exist.",
-                        partId.ToString());
+                        partKey);
             }
         }
     }
@@ -127,25 +127,26 @@ public class ProjectValidator
         if (animation.DurationSeconds <= 0)
             result.AddError("ANIMATION_INVALID_DURATION", $"Animation '{animation.Name}' has invalid duration: {animation.DurationSeconds}.");
 
-        if (!project.Skeletons.ContainsKey(animation.SkeletonId))
+        if (!project.Skeletons.ContainsKey(animation.SkeletonId.ToKeyString()))
             result.AddWarning("ANIMATION_MISSING_SKELETON",
                 $"Animation '{animation.Name}' references skeleton {animation.SkeletonId} that is not in the project.",
                 animation.AnimationId.ToString());
 
         // Check keyframes
-        foreach (var (boneId, track) in animation.BoneTracks)
+        foreach (var (boneKey, track) in animation.BoneTracks)
         {
+            _ = boneKey; // string key, used for display
             var sorted = track.GetSortedKeyframes();
             for (int i = 0; i < sorted.Count; i++)
             {
                 if (sorted[i].TimeSeconds < 0)
                     result.AddError("KEYFRAME_NEGATIVE_TIME",
-                        $"Keyframe at {sorted[i].TimeSeconds}s in bone {boneId} has negative time.",
+                        $"Keyframe at {sorted[i].TimeSeconds}s in bone track has negative time.",
                         animation.AnimationId.ToString());
 
                 if (i > 0 && Math.Abs(sorted[i].TimeSeconds - sorted[i - 1].TimeSeconds) < 0.0001)
                     result.AddError("KEYFRAME_DUPLICATE_TIME",
-                        $"Duplicate keyframe time {sorted[i].TimeSeconds}s in bone {boneId}.",
+                        $"Duplicate keyframe time {sorted[i].TimeSeconds}s in bone track.",
                         animation.AnimationId.ToString());
             }
         }

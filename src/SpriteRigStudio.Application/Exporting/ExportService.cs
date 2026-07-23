@@ -47,7 +47,7 @@ public class ExportService
                 $"Increase columns/rows or change the overflow policy.");
 
         // Validate character has skeleton
-        if (!project.Skeletons.ContainsKey(character.SkeletonId))
+        if (!project.Skeletons.ContainsKey(character.SkeletonId.ToKeyString()))
             result.AddError("EXPORT_MISSING_SKELETON",
                 $"Character '{character.Name}' references skeleton {character.SkeletonId} which was not found.");
 

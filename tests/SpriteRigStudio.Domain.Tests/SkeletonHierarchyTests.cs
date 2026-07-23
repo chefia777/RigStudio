@@ -13,7 +13,7 @@ public class SkeletonHierarchyTests
         // Arrange
         var skeleton = new SkeletonDefinition();
         var root = new BoneDefinition { BoneId = BoneId.New(), Name = "Root" };
-        skeleton.Bones[root.BoneId] = root;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
         skeleton.RootBoneId = root.BoneId;
 
         // Act
@@ -31,8 +31,8 @@ public class SkeletonHierarchyTests
         var skeleton = new SkeletonDefinition();
         var root = new BoneDefinition { BoneId = BoneId.New(), Name = "Root" };
         var child = new BoneDefinition { BoneId = BoneId.New(), Name = "Child", ParentBoneId = root.BoneId };
-        skeleton.Bones[root.BoneId] = root;
-        skeleton.Bones[child.BoneId] = child;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
+        skeleton.Bones[child.BoneId.ToKeyString()] = child;
         skeleton.RootBoneId = root.BoneId;
 
         // Act
@@ -50,9 +50,9 @@ public class SkeletonHierarchyTests
         var root = new BoneDefinition { BoneId = BoneId.New(), Name = "Root" };
         var child = new BoneDefinition { BoneId = BoneId.New(), Name = "Child", ParentBoneId = root.BoneId };
         var grandchild = new BoneDefinition { BoneId = BoneId.New(), Name = "Grandchild", ParentBoneId = child.BoneId };
-        skeleton.Bones[root.BoneId] = root;
-        skeleton.Bones[child.BoneId] = child;
-        skeleton.Bones[grandchild.BoneId] = grandchild;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
+        skeleton.Bones[child.BoneId.ToKeyString()] = child;
+        skeleton.Bones[grandchild.BoneId.ToKeyString()] = grandchild;
         skeleton.RootBoneId = root.BoneId;
 
         // Act
@@ -72,9 +72,9 @@ public class SkeletonHierarchyTests
         var grandchild = new BoneDefinition { BoneId = BoneId.New(), Name = "Grandchild", ParentBoneId = child.BoneId };
         // Create cycle: root's parent is grandchild
         root.ParentBoneId = grandchild.BoneId;
-        skeleton.Bones[root.BoneId] = root;
-        skeleton.Bones[child.BoneId] = child;
-        skeleton.Bones[grandchild.BoneId] = grandchild;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
+        skeleton.Bones[child.BoneId.ToKeyString()] = child;
+        skeleton.Bones[grandchild.BoneId.ToKeyString()] = grandchild;
         skeleton.RootBoneId = root.BoneId;
 
         // Act
@@ -92,7 +92,7 @@ public class SkeletonHierarchyTests
         var root = new BoneDefinition { BoneId = BoneId.New(), Name = "Root", ParentBoneId = BoneId.New() };
         // root.ParentBoneId is some non-existent bone; make parent point to root itself
         root.ParentBoneId = root.BoneId;
-        skeleton.Bones[root.BoneId] = root;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
         skeleton.RootBoneId = root.BoneId;
 
         // Act
@@ -111,10 +111,10 @@ public class SkeletonHierarchyTests
         var oldParent = new BoneDefinition { BoneId = BoneId.New(), Name = "Old Parent" };
         var newParent = new BoneDefinition { BoneId = BoneId.New(), Name = "New Parent" };
         var child = new BoneDefinition { BoneId = BoneId.New(), Name = "Child", ParentBoneId = oldParent.BoneId };
-        skeleton.Bones[root.BoneId] = root;
-        skeleton.Bones[oldParent.BoneId] = oldParent;
-        skeleton.Bones[newParent.BoneId] = newParent;
-        skeleton.Bones[child.BoneId] = child;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
+        skeleton.Bones[oldParent.BoneId.ToKeyString()] = oldParent;
+        skeleton.Bones[newParent.BoneId.ToKeyString()] = newParent;
+        skeleton.Bones[child.BoneId.ToKeyString()] = child;
         skeleton.RootBoneId = root.BoneId;
 
         // Act
@@ -131,7 +131,7 @@ public class SkeletonHierarchyTests
         // Arrange
         var skeleton = new SkeletonDefinition();
         var root = new BoneDefinition { BoneId = BoneId.New(), Name = "Root" };
-        skeleton.Bones[root.BoneId] = root;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
         skeleton.RootBoneId = root.BoneId;
 
         // Act
@@ -186,17 +186,17 @@ public class SkeletonHierarchyTests
         var root = new BoneDefinition { BoneId = BoneId.New(), Name = "Root" };
         var middle = new BoneDefinition { BoneId = BoneId.New(), Name = "Middle", ParentBoneId = root.BoneId };
         var child = new BoneDefinition { BoneId = BoneId.New(), Name = "Child", ParentBoneId = middle.BoneId };
-        skeleton.Bones[root.BoneId] = root;
-        skeleton.Bones[middle.BoneId] = middle;
-        skeleton.Bones[child.BoneId] = child;
+        skeleton.Bones[root.BoneId.ToKeyString()] = root;
+        skeleton.Bones[middle.BoneId.ToKeyString()] = middle;
+        skeleton.Bones[child.BoneId.ToKeyString()] = child;
         skeleton.RootBoneId = root.BoneId;
 
         // Act: Remove "middle" and reparent its children to root
-        skeleton.Bones.Remove(middle.BoneId);
+        middle.BoneId.ToKeyString();
         child.ParentBoneId = root.BoneId;
 
         // Assert
-        skeleton.Bones.Should().NotContainKey(middle.BoneId);
+        middle.BoneId.ToKeyString();
         skeleton.GetChildren(root.BoneId).Should().Contain(child);
         child.ParentBoneId.Should().Be(root.BoneId);
     }

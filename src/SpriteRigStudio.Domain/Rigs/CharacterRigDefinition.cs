@@ -29,19 +29,19 @@ public class CharacterRigDefinition
     public CharacterSetupTransform SetupTransform { get; set; } = new();
 
     /// <summary>Per-bone setup overrides for this character.</summary>
-    public Dictionary<BoneId, BoneSetupOverride> BoneSetupOverrides { get; init; } = new();
+    public Dictionary<string, BoneSetupOverride> BoneSetupOverrides { get; init; } = new();
 
     /// <summary>Ground anchor position in skeleton space.</summary>
     public Vector2D GroundAnchor { get; set; }
 
     /// <summary>Sprite parts belonging to this character.</summary>
-    public Dictionary<SpritePartId, SpritePartDefinition> SpriteParts { get; init; } = new();
+    public Dictionary<string, SpritePartDefinition> SpriteParts { get; init; } = new();
 
     /// <summary>Masks defined for this character's flattened artwork.</summary>
-    public Dictionary<Guid, PolygonMaskDefinition> Masks { get; init; } = new();
+    public Dictionary<string, PolygonMaskDefinition> Masks { get; init; } = new();
 
     /// <summary>Per-animation character-specific corrections.</summary>
-    public Dictionary<AnimationId, CharacterAnimationOverride> CharacterAnimationOverrides { get; init; } = new();
+    public Dictionary<string, CharacterAnimationOverride> CharacterAnimationOverrides { get; init; } = new();
 
     /// <summary>Optional metadata dictionary.</summary>
     public Dictionary<string, string> Metadata { get; init; } = new(StringComparer.Ordinal);

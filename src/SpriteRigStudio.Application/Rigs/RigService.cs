@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Extensions.Logging;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Geometry;
@@ -62,7 +63,7 @@ public class RigService
     /// </summary>
     public void UpdateBoneSetup(CharacterRigDefinition rig, BoneId boneId, BoneSetupOverride setupOverride)
     {
-        rig.BoneSetupOverrides[boneId] = setupOverride;
+        rig.BoneSetupOverrides[boneId.ToKeyString()] = setupOverride;
     }
 
     /// <summary>
@@ -87,7 +88,7 @@ public class RigService
             RenderOrder = rig.SpriteParts.Count * 10
         };
 
-        rig.SpriteParts[part.SpritePartId] = part;
+        rig.SpriteParts[part.SpritePartId.ToKeyString()] = part;
         return part;
     }
 
@@ -113,7 +114,7 @@ public class RigService
             RenderOrder = rig.SpriteParts.Count * 10
         };
 
-        rig.SpriteParts[part.SpritePartId] = part;
+        rig.SpriteParts[part.SpritePartId.ToKeyString()] = part;
         return part;
     }
 
@@ -122,7 +123,7 @@ public class RigService
     /// </summary>
     public Result BindPartToBone(CharacterRigDefinition rig, SpritePartId partId, BoneId boneId)
     {
-        if (!rig.SpriteParts.TryGetValue(partId, out var part))
+        if (!rig.SpriteParts.TryGetValue(partId.ToKeyString(), out var part))
             return Result.Failure("PART_NOT_FOUND", $"Sprite part {partId} not found.");
 
         part.BoundBoneId = boneId;
@@ -134,7 +135,7 @@ public class RigService
     /// </summary>
     public void UpdatePartPivot(CharacterRigDefinition rig, SpritePartId partId, Vector2D pivot)
     {
-        if (rig.SpriteParts.TryGetValue(partId, out var part))
+        if (rig.SpriteParts.TryGetValue(partId.ToKeyString(), out var part))
         {
             part.Pivot = pivot;
         }
@@ -145,7 +146,7 @@ public class RigService
     /// </summary>
     public void UpdatePartRenderOrder(CharacterRigDefinition rig, SpritePartId partId, int order)
     {
-        if (rig.SpriteParts.TryGetValue(partId, out var part))
+        if (rig.SpriteParts.TryGetValue(partId.ToKeyString(), out var part))
         {
             part.RenderOrder = order;
         }
@@ -166,11 +167,11 @@ public class RigService
             GroundAnchor = source.GroundAnchor
         };
 
-        foreach (var (boneId, override_) in source.BoneSetupOverrides)
+        foreach (var (boneKey, override_) in source.BoneSetupOverrides)
         {
-            duplicate.BoneSetupOverrides[boneId] = new BoneSetupOverride
+            duplicate.BoneSetupOverrides[boneKey] = new BoneSetupOverride
             {
-                BoneId = boneId,
+                BoneId = new BoneId(Guid.Parse(boneKey)),
                 LocalPosition = override_.LocalPosition,
                 LocalRotationDegrees = override_.LocalRotationDegrees,
                 LocalScale = override_.LocalScale,

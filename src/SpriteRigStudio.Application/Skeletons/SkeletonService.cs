@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Extensions.Logging;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Projects;
@@ -39,7 +40,7 @@ public class SkeletonService
             ReferenceLength = 1.0
         };
 
-        skeleton.Bones[rootBone.BoneId] = rootBone;
+        skeleton.Bones[rootBone.BoneId.ToKeyString()] = rootBone;
         skeleton.RootBoneId = rootBone.BoneId;
 
         return skeleton;
@@ -50,7 +51,7 @@ public class SkeletonService
     /// </summary>
     public Result AddBone(SkeletonDefinition skeleton, string name, BoneRole role, BoneId parentId, Transform2D localTransform)
     {
-        if (!skeleton.Bones.ContainsKey(parentId))
+        if (!skeleton.Bones.ContainsKey(parentId.ToKeyString()))
             return Result.Failure("PARENT_NOT_FOUND", $"Parent bone {parentId} not found.");
 
         var bone = new BoneDefinition
@@ -63,7 +64,7 @@ public class SkeletonService
             ReferenceLength = Math.Max(1.0, localTransform.Position.Length)
         };
 
-        skeleton.Bones[bone.BoneId] = bone;
+        skeleton.Bones[bone.BoneId.ToKeyString()] = bone;
         return Result.Success();
     }
 
@@ -72,7 +73,7 @@ public class SkeletonService
     /// </summary>
     public Result RemoveBone(SkeletonDefinition skeleton, BoneId boneId)
     {
-        if (!skeleton.Bones.TryGetValue(boneId, out var bone))
+        if (!skeleton.Bones.TryGetValue(boneId.ToKeyString(), out var bone))
             return Result.Failure("BONE_NOT_FOUND", $"Bone {boneId} not found.");
 
         if (bone.BoneId == skeleton.RootBoneId)
@@ -85,7 +86,7 @@ public class SkeletonService
             child.ParentBoneId = parentId;
         }
 
-        skeleton.Bones.Remove(boneId);
+        skeleton.Bones.Remove(boneId.ToKeyString());
         return Result.Success();
     }
 
@@ -94,10 +95,10 @@ public class SkeletonService
     /// </summary>
     public Result ReparentBone(SkeletonDefinition skeleton, BoneId boneId, BoneId newParentId)
     {
-        if (!skeleton.Bones.TryGetValue(boneId, out var bone))
+        if (!skeleton.Bones.TryGetValue(boneId.ToKeyString(), out var bone))
             return Result.Failure("BONE_NOT_FOUND", $"Bone {boneId} not found.");
 
-        if (!skeleton.Bones.ContainsKey(newParentId))
+        if (!skeleton.Bones.ContainsKey(newParentId.ToKeyString()))
             return Result.Failure("PARENT_NOT_FOUND", $"New parent bone {newParentId} not found.");
 
         if (boneId == newParentId)
@@ -121,7 +122,7 @@ public class SkeletonService
             if (!visited.Add(current))
                 return true;
 
-            if (!skeleton.Bones.TryGetValue(current, out var bone) || !bone.ParentBoneId.HasValue)
+            if (!skeleton.Bones.TryGetValue(current.ToKeyString(), out var bone) || !bone.ParentBoneId.HasValue)
                 return false;
 
             current = bone.ParentBoneId.Value;
@@ -144,12 +145,13 @@ public class SkeletonService
             DefaultGroundAnchor = source.DefaultGroundAnchor
         };
 
-        foreach (var (boneId, bone) in source.Bones)
+        foreach (var (boneKey, bone) in source.Bones)
         {
+            var boneId = new BoneId(Guid.Parse(boneKey));
             var newId = BoneId.New();
             idMap[boneId] = newId;
 
-            duplicate.Bones[newId] = new BoneDefinition
+            duplicate.Bones[newId.ToKeyString()] = new BoneDefinition
             {
                 BoneId = newId,
                 Name = bone.Name,
@@ -170,7 +172,7 @@ public class SkeletonService
     /// </summary>
     public void MirrorBoneChain(SkeletonDefinition skeleton, BoneId sourceBoneId, bool toRight)
     {
-        if (!skeleton.Bones.TryGetValue(sourceBoneId, out var sourceBone))
+        if (!skeleton.Bones.TryGetValue(sourceBoneId.ToKeyString(), out var sourceBone))
             return;
 
         // Find the corresponding bone on the other side by swapping Left/Right in role

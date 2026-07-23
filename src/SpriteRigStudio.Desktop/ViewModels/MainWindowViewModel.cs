@@ -3,18 +3,24 @@ using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Windows.Input;
+using Avalonia.Platform.Storage;
 using ReactiveUI;
 using SpriteRigStudio.Application.Animations;
 using SpriteRigStudio.Application.Exporting;
 using SpriteRigStudio.Application.Projects;
 using SpriteRigStudio.Application.Rigs;
 using SpriteRigStudio.Application.Skeletons;
+using SpriteRigStudio.Desktop.Platform;
 using SpriteRigStudio.Domain.Animations;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Exporting;
 using SpriteRigStudio.Domain.Projects;
 using SpriteRigStudio.Domain.Rigs;
 using SpriteRigStudio.Domain.Skeletons;
+using SpriteRigStudio.Infrastructure.Serialization;
+using SpriteRigStudio.Rendering.Abstractions;
+using SpriteRigStudio.Rendering.Composition;
+using SpriteRigStudio.Rendering.Spritesheets;
 
 namespace SpriteRigStudio.Desktop.ViewModels;
 
@@ -30,6 +36,13 @@ public class MainWindowViewModel : ReactiveObject
     private readonly RigService _rigService;
     private readonly AnimationService _animationService;
     private readonly ExportService _exportService;
+    private readonly IWindowProvider _windowProvider;
+    private readonly IRigPoseEvaluator _rigPoseEvaluator;
+    private readonly FrameRenderer _frameRenderer;
+    private readonly SpritesheetComposer _spritesheetComposer;
+    private readonly IImageEncoder _imageEncoder;
+    private readonly IImageDecoder _imageDecoder;
+    private readonly ProjectSerializer _projectSerializer;
 
     // --- Active workspace ---
     private string _activeWorkspace = "Project";
@@ -60,13 +73,27 @@ public class MainWindowViewModel : ReactiveObject
         SkeletonService skeletonService,
         RigService rigService,
         AnimationService animationService,
-        ExportService exportService)
+        ExportService exportService,
+        IWindowProvider windowProvider,
+        IRigPoseEvaluator rigPoseEvaluator,
+        FrameRenderer frameRenderer,
+        SpritesheetComposer spritesheetComposer,
+        IImageEncoder imageEncoder,
+        IImageDecoder imageDecoder,
+        ProjectSerializer projectSerializer)
     {
         _projectService = projectService;
         _skeletonService = skeletonService;
         _rigService = rigService;
         _animationService = animationService;
         _exportService = exportService;
+        _windowProvider = windowProvider;
+        _rigPoseEvaluator = rigPoseEvaluator;
+        _frameRenderer = frameRenderer;
+        _spritesheetComposer = spritesheetComposer;
+        _imageEncoder = imageEncoder;
+        _imageDecoder = imageDecoder;
+        _projectSerializer = projectSerializer;
 
         _projectPanel = new ProjectPanelViewModel();
         _inspector = new InspectorViewModel();
@@ -221,7 +248,19 @@ public class MainWindowViewModel : ReactiveObject
     {
         try
         {
-            var result = await _projectService.CreateProjectAsync("Untitled Project", GetDefaultProjectDirectory());
+            var window = _windowProvider.GetMainWindow();
+            if (window == null)
+            {
+                StatusMessage = "Cannot open dialog: no active window.";
+                return;
+            }
+
+var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Project Directory",  AllowMultiple = false });
+            var selectedPath = folders?.FirstOrDefault()?.Path?.LocalPath;
+            if (string.IsNullOrEmpty(selectedPath))
+                return;
+
+            var result = await _projectService.CreateProjectAsync("Untitled Project", selectedPath);
             if (result.IsSuccess && result.Project != null)
             {
                 ActiveProject = result.Project;
@@ -245,8 +284,19 @@ public class MainWindowViewModel : ReactiveObject
     {
         try
         {
-            // TODO: Show folder picker dialog
-            var path = PromptForProjectDirectory();
+            var window = _windowProvider.GetMainWindow();
+            if (window == null)
+            {
+                StatusMessage = "Cannot open dialog: no active window.";
+                return;
+            }
+
+            var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = "Open Project Directory",
+                AllowMultiple = false
+            });
+            var path = folders?.FirstOrDefault()?.Path?.LocalPath;
             if (string.IsNullOrEmpty(path)) return;
 
             var result = await _projectService.OpenProjectAsync(path);
@@ -293,10 +343,40 @@ public class MainWindowViewModel : ReactiveObject
         }
     }
 
-    private Task SaveProjectAsAsync()
+    private async Task SaveProjectAsAsync()
     {
-        // TODO: Show folder picker dialog
-        return Task.CompletedTask;
+        if (_activeProject == null) return;
+
+        try
+        {
+            var window = _windowProvider.GetMainWindow();
+            if (window == null)
+            {
+                StatusMessage = "Cannot open dialog: no active window.";
+                return;
+            }
+
+var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Save Directory",  AllowMultiple = false });
+            var selectedPath = folders?.FirstOrDefault()?.Path?.LocalPath;
+            if (string.IsNullOrEmpty(selectedPath))
+                return;
+
+            var result = await _projectService.SaveProjectAsAsync(_activeProject, selectedPath);
+            if (result.IsSuccess)
+            {
+                IsDirty = false;
+                StatusMessage = $"Project saved to {result.FilePath}";
+                this.RaisePropertyChanged(nameof(Title));
+            }
+            else
+            {
+                StatusMessage = $"Failed to save: {result.ErrorMessage}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+        }
     }
 
     private void Undo()
@@ -324,12 +404,12 @@ public class MainWindowViewModel : ReactiveObject
         StatusMessage = "Stopped";
     }
 
-    private Task ExportAnimationAsync()
+    private async Task ExportAnimationAsync()
     {
         if (_activeProject == null || _activeCharacter == null || _activeAnimation == null || _activeProfile == null)
         {
             StatusMessage = "Select a character, animation, and export profile to export.";
-            return Task.CompletedTask;
+            return;
         }
 
         try
@@ -338,17 +418,101 @@ public class MainWindowViewModel : ReactiveObject
             if (!validation.IsValid)
             {
                 StatusMessage = $"Export validation failed: {string.Join("; ", validation.All.Select(i => i.Message))}";
-                return Task.CompletedTask;
+                return;
             }
 
-            // TODO: Execute export via rendering pipeline
+            if (string.IsNullOrEmpty(_activeProject.ProjectDirectory))
+            {
+                StatusMessage = "Project must be saved before exporting.";
+                return;
+            }
+
             StatusMessage = $"Exporting animation '{_activeAnimation.Name}'...";
+
+            // 1. Get export paths
+            var paths = _exportService.GetOutputPaths(
+                _activeProject.ProjectDirectory,
+                _activeCharacter.Name,
+                _activeAnimation.Name,
+                _activeProfile);
+
+            Directory.CreateDirectory(paths.ExportsDirectory);
+
+            // 2. Get skeleton
+            if (!_activeProject.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var skeleton))
+            {
+                StatusMessage = $"Skeleton {_activeCharacter.SkeletonId} not found for character.";
+                return;
+            }
+
+            // 3. Decode all images referenced by character parts
+            var decodedImages = new Dictionary<string, DecodedImageInfo>();
+            foreach (var part in _activeCharacter.SpriteParts.Values)
+            {
+                if (string.IsNullOrEmpty(part.ImageReference) || decodedImages.ContainsKey(part.ImageReference))
+                    continue;
+                var imagePath = System.IO.Path.Combine(_activeProject.ProjectDirectory, part.ImageReference);
+                var decodeResult = await _imageDecoder.DecodeAsync(imagePath);
+                if (decodeResult.IsSuccess && decodeResult.Value != null)
+                    decodedImages[part.ImageReference] = decodeResult.Value;
+            }
+
+            // 4. Evaluate and render each frame
+            var frameCount = _animationService.GetSampledFrameCount(_activeAnimation, _activeProfile.FrameRate);
+            var frames = new List<byte[]>(frameCount);
+            for (int i = 0; i < frameCount; i++)
+            {
+                var time = _animationService.GetSampleTime(_activeAnimation, i, _activeProfile.FrameRate);
+                var pose = _rigPoseEvaluator.EvaluateAnimationPose(skeleton, _activeCharacter, _activeAnimation, time);
+                var framePixels = _frameRenderer.RenderFrame(pose, _activeCharacter, _activeProfile, decodedImages);
+                frames.Add(framePixels);
+            }
+
+            // 5. Compose spritesheet
+            var sheetPixels = _spritesheetComposer.ComposeSpritesheet(
+                frames,
+                _activeProfile.Columns,
+                _activeProfile.Rows,
+                _activeProfile.FrameWidth,
+                _activeProfile.FrameHeight);
+
+            // 6. Write PNG file
+            var encodeResult = await _imageEncoder.EncodePngToFileAsync(
+                paths.SpritesheetPath,
+                _activeProfile.SheetWidth,
+                _activeProfile.SheetHeight,
+                sheetPixels);
+            if (encodeResult.IsFailure)
+            {
+                StatusMessage = $"Failed to write spritesheet: {encodeResult.ErrorMessage}";
+                return;
+            }
+
+            // 7. Write metadata JSON
+            var metadata = new
+            {
+                project = _activeProject.Name,
+                character = _activeCharacter.Name,
+                animation = _activeAnimation.Name,
+                profile = _activeProfile.Name,
+                frames = frameCount,
+                frameWidth = _activeProfile.FrameWidth,
+                frameHeight = _activeProfile.FrameHeight,
+                sheetWidth = _activeProfile.SheetWidth,
+                sheetHeight = _activeProfile.SheetHeight,
+                columns = _activeProfile.Columns,
+                rows = _activeProfile.Rows,
+                timestamp = DateTime.UtcNow.ToString("O")
+            };
+            var metadataJson = _projectSerializer.Serialize(metadata);
+            await File.WriteAllTextAsync(paths.MetadataPath, metadataJson);
+
+            StatusMessage = $"Export complete: {frameCount} frames → {paths.SpritesheetPath}";
         }
         catch (Exception ex)
         {
             StatusMessage = $"Export error: {ex.Message}";
         }
-        return Task.CompletedTask;
     }
 
     private async Task ExportAllAsync()
@@ -399,9 +563,5 @@ public class MainWindowViewModel : ReactiveObject
         return System.IO.Path.Combine(documents, "SpriteRigStudio", "Projects");
     }
 
-    private static string? PromptForProjectDirectory()
-    {
-        // TODO: Integrate with Avalonia folder picker dialog
-        return null;
-    }
 }
+

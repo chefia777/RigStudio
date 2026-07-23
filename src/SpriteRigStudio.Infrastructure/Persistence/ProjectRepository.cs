@@ -1,7 +1,11 @@
 using Microsoft.Extensions.Logging;
 using SpriteRigStudio.Application.Abstractions;
+using SpriteRigStudio.Domain.Animations;
 using SpriteRigStudio.Domain.Common;
+using SpriteRigStudio.Domain.Exporting;
 using SpriteRigStudio.Domain.Projects;
+using SpriteRigStudio.Domain.Rigs;
+using SpriteRigStudio.Domain.Skeletons;
 using SpriteRigStudio.Infrastructure.Serialization;
 
 namespace SpriteRigStudio.Infrastructure.Persistence;
@@ -107,8 +111,48 @@ public class ProjectRepository : IProjectRepository
                     continue;
 
                 var json = await _fileSystem.ReadAllTextAsync(fullPath);
-                // Parse skeleton and add to project
-                // (simplified - full DTO mapping would go here)
+                var skeleton = _serializer.Deserialize<SkeletonDefinition>(json);
+                if (skeleton != null)
+                    project.Skeletons[skeleton.SkeletonId.ToKeyString()] = skeleton;
+            }
+
+            // Characters
+            foreach (var charFile in manifest.CharacterFiles)
+            {
+                var fullPath = _fileSystem.CombinePath(projectDirectory, charFile);
+                if (!_fileSystem.FileExists(fullPath))
+                    continue;
+
+                var json = await _fileSystem.ReadAllTextAsync(fullPath);
+                var character = _serializer.Deserialize<CharacterRigDefinition>(json);
+                if (character != null)
+                    project.CharacterRigs[character.CharacterRigId.ToKeyString()] = character;
+            }
+
+            // Animations
+            foreach (var animFile in manifest.AnimationFiles)
+            {
+                var fullPath = _fileSystem.CombinePath(projectDirectory, animFile);
+                if (!_fileSystem.FileExists(fullPath))
+                    continue;
+
+                var json = await _fileSystem.ReadAllTextAsync(fullPath);
+                var anim = _serializer.Deserialize<AnimationClipDefinition>(json);
+                if (anim != null)
+                    project.Animations[anim.AnimationId.ToKeyString()] = anim;
+            }
+
+            // Export profiles
+            foreach (var profFile in manifest.ExportProfileFiles)
+            {
+                var fullPath = _fileSystem.CombinePath(projectDirectory, profFile);
+                if (!_fileSystem.FileExists(fullPath))
+                    continue;
+
+                var json = await _fileSystem.ReadAllTextAsync(fullPath);
+                var profile = _serializer.Deserialize<ExportProfile>(json);
+                if (profile != null)
+                    project.ExportProfiles[profile.ExportProfileId.ToKeyString()] = profile;
             }
 
             _logger.LogInformation("Opened project: {Name} from {Path}", manifest.Name, projectDirectory);

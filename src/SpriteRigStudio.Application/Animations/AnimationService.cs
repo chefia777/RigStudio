@@ -40,10 +40,10 @@ public class AnimationService
     /// </summary>
     public Result AddKeyframe(AnimationClipDefinition animation, BoneId boneId, TransformKeyframe keyframe)
     {
-        if (!animation.BoneTracks.TryGetValue(boneId, out var track))
+        if (!animation.BoneTracks.TryGetValue(boneId.ToKeyString(), out var track))
         {
             track = new BoneTrack { BoneId = boneId };
-            animation.BoneTracks[boneId] = track;
+            animation.BoneTracks[boneId.ToKeyString()] = track;
         }
 
         // Check for duplicate time
@@ -63,7 +63,7 @@ public class AnimationService
     public Result UpdateKeyframe(AnimationClipDefinition animation, BoneId boneId, double timeSeconds,
         Vector2D? position = null, double? rotationDegrees = null, Vector2D? scale = null)
     {
-        if (!animation.BoneTracks.TryGetValue(boneId, out var track))
+        if (!animation.BoneTracks.TryGetValue(boneId.ToKeyString(), out var track))
             return Result.Failure("TRACK_NOT_FOUND", $"No track found for bone {boneId}.");
 
         var keyframe = track.Keyframes.FirstOrDefault(k => Math.Abs(k.TimeSeconds - timeSeconds) < 0.001);
@@ -82,7 +82,7 @@ public class AnimationService
     /// </summary>
     public Result DeleteKeyframe(AnimationClipDefinition animation, BoneId boneId, double timeSeconds)
     {
-        if (!animation.BoneTracks.TryGetValue(boneId, out var track))
+        if (!animation.BoneTracks.TryGetValue(boneId.ToKeyString(), out var track))
             return Result.Failure("TRACK_NOT_FOUND", $"No track found for bone {boneId}.");
 
         var keyframe = track.Keyframes.FirstOrDefault(k => Math.Abs(k.TimeSeconds - timeSeconds) < 0.001);
@@ -98,7 +98,7 @@ public class AnimationService
     /// </summary>
     public Result MoveKeyframes(AnimationClipDefinition animation, BoneId boneId, double fromTime, double toTime)
     {
-        if (!animation.BoneTracks.TryGetValue(boneId, out var track))
+        if (!animation.BoneTracks.TryGetValue(boneId.ToKeyString(), out var track))
             return Result.Failure("TRACK_NOT_FOUND", $"No track found for bone {boneId}.");
 
         // Check target time is not occupied

@@ -94,7 +94,7 @@ public class RigPoseEvaluator : IRigPoseEvaluator
             return pose;
 
         // Get character animation overrides for this animation
-        rig.CharacterAnimationOverrides.TryGetValue(animation.AnimationId, out var animationOverride);
+        rig.CharacterAnimationOverrides.TryGetValue(animation.AnimationId.ToKeyString(), out var animationOverride);
 
         // Compute setup locals and worlds first (without animation)
         var setupLocals = new Dictionary<BoneId, Transform2D>();
@@ -111,7 +111,7 @@ public class RigPoseEvaluator : IRigPoseEvaluator
 
             // Sample animation track for this bone
             Transform2D animatedLocal;
-            if (animation.BoneTracks.TryGetValue(bone.BoneId, out var track))
+            if (animation.BoneTracks.TryGetValue(bone.BoneId.ToKeyString(), out var track))
             {
                 animatedLocal = SampleTrack(track, effectiveTime);
             }
@@ -163,7 +163,7 @@ public class RigPoseEvaluator : IRigPoseEvaluator
     {
         var rest = bone.RestLocalTransform;
 
-        if (rig.BoneSetupOverrides.TryGetValue(bone.BoneId, out var setupOverride))
+        if (rig.BoneSetupOverrides.TryGetValue(bone.BoneId.ToKeyString(), out var setupOverride))
         {
             return new Transform2D(
                 rest.Position + setupOverride.LocalPosition,

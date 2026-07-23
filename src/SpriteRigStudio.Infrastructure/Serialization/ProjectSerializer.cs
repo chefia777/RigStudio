@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SpriteRigStudio.Domain.Projects;
 
 namespace SpriteRigStudio.Infrastructure.Serialization;
@@ -9,15 +10,27 @@ namespace SpriteRigStudio.Infrastructure.Serialization;
 /// </summary>
 public class ProjectSerializer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
+    private static readonly JsonSerializerOptions IndentedOptions = CreateOptions(true);
+
+    private static JsonSerializerOptions CreateOptions(bool writeIndented = false)
     {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
+        var options = new JsonSerializerOptions
+        {
+            WriteIndented = writeIndented,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        // Register converter factory for strongly-typed IDs
+        // (handles both value and dictionary-key serialization)
+        options.Converters.Add(new StronglyTypedIdConverterFactory());
+
+        return options;
+    }
 
     /// <summary>
     /// Serializes an object to a JSON string.
@@ -47,9 +60,9 @@ public class ProjectSerializer
     }
 
     /// <summary>
-    /// Serializes the project manifest.
+    /// Serializes the project manifest with indentation for human readability.
     /// </summary>
-    public string SerializeManifest(ProjectManifest manifest) => Serialize(manifest);
+    public string SerializeManifest(ProjectManifest manifest) => JsonSerializer.Serialize(manifest, IndentedOptions);
 
     /// <summary>
     /// Deserializes the project manifest.

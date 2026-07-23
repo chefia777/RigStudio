@@ -60,7 +60,7 @@ public static class DefaultHumanoidSkeleton
 
         foreach (var bone in allBones)
         {
-            skeleton.Bones[bone.BoneId] = bone;
+            skeleton.Bones[bone.BoneId.ToKeyString()] = bone;
         }
 
         skeleton.RootBoneId = root.BoneId;

@@ -18,8 +18,11 @@ public class SkeletonDefinition
     /// <summary>The ID of the root bone. Must reference a bone in <see cref="Bones"/>.</summary>
     public BoneId RootBoneId { get; set; }
 
-    /// <summary>All bones in this skeleton, keyed by ID.</summary>
-    public Dictionary<BoneId, BoneDefinition> Bones { get; init; } = new();
+    /// <summary>
+    /// All bones in this skeleton, keyed by BoneId.ToKeyString().
+    /// Uses string keys for JSON serialization compatibility.
+    /// </summary>
+    public Dictionary<string, BoneDefinition> Bones { get; init; } = new();
 
     /// <summary>Reference dimensions for scaling animations to different characters.</summary>
     public Size2D ReferenceDimensions { get; set; }
@@ -43,30 +46,31 @@ public class SkeletonDefinition
     /// </summary>
     public bool HasCycles()
     {
-        var visited = new HashSet<BoneId>();
-        var inProgress = new HashSet<BoneId>();
+        var visited = new HashSet<string>();
+        var inProgress = new HashSet<string>();
 
-        bool Dfs(BoneId id)
+        bool Dfs(string boneKey)
         {
-            if (inProgress.Contains(id))
+            if (inProgress.Contains(boneKey))
                 return true;
-            if (visited.Contains(id))
+            if (visited.Contains(boneKey))
                 return false;
 
-            inProgress.Add(id);
-            if (Bones.TryGetValue(id, out var bone) && bone.ParentBoneId.HasValue)
+            inProgress.Add(boneKey);
+            if (Bones.TryGetValue(boneKey, out var bone) && bone.ParentBoneId.HasValue)
             {
-                if (Dfs(bone.ParentBoneId.Value))
+                var parentKey = bone.ParentBoneId.Value.ToKeyString();
+                if (Dfs(parentKey))
                     return true;
             }
-            inProgress.Remove(id);
-            visited.Add(id);
+            inProgress.Remove(boneKey);
+            visited.Add(boneKey);
             return false;
         }
 
-        foreach (var boneId in Bones.Keys)
+        foreach (var boneKey in Bones.Keys)
         {
-            if (Dfs(boneId))
+            if (Dfs(boneKey))
                 return true;
         }
         return false;
@@ -76,7 +80,7 @@ public class SkeletonDefinition
     /// Gets the root bone. Returns null if not found.
     /// </summary>
     public BoneDefinition? GetRootBone() =>
-        Bones.TryGetValue(RootBoneId, out var root) ? root : null;
+        Bones.TryGetValue(RootBoneId.ToKeyString(), out var root) ? root : null;
 
     public override string ToString() => $"{Name} ({Bones.Count} bones) [{SkeletonId}]";
 }

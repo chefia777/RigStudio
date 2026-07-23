@@ -41,7 +41,7 @@ public class ProjectService
 
             // Add default humanoid skeleton
             var skeleton = DefaultHumanoidSkeleton.Create();
-            project.Skeletons[skeleton.SkeletonId] = skeleton;
+            project.Skeletons[skeleton.SkeletonId.ToKeyString()] = skeleton;
 
             var result = await _repository.CreateAsync(directory, project);
             if (result.IsFailure)

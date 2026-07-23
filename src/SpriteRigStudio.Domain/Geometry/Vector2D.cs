@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using System.Text.Json.Serialization;
 
 namespace SpriteRigStudio.Domain.Geometry;
 
@@ -15,7 +16,7 @@ public readonly record struct Vector2D(double X, double Y)
 
     public double Length => Math.Sqrt(X * X + Y * Y);
     public double LengthSquared => X * X + Y * Y;
-    public Vector2D Normalized => Length > 0 ? this / Length : Zero;
+    [JsonIgnore] public Vector2D Normalized => Length > 0 ? this / Length : Zero;
 
     public static Vector2D operator +(Vector2D a, Vector2D b) => new(a.X + b.X, a.Y + b.Y);
     public static Vector2D operator -(Vector2D a, Vector2D b) => new(a.X - b.X, a.Y - b.Y);

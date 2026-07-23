@@ -28,16 +28,16 @@ public class SpriteRigProject
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
     /// <summary>Skeletons defined in this project.</summary>
-    public Dictionary<SkeletonId, SkeletonDefinition> Skeletons { get; init; } = new();
+    public Dictionary<string, SkeletonDefinition> Skeletons { get; init; } = new();
 
     /// <summary>Character rigs in this project.</summary>
-    public Dictionary<CharacterRigId, CharacterRigDefinition> CharacterRigs { get; init; } = new();
+    public Dictionary<string, CharacterRigDefinition> CharacterRigs { get; init; } = new();
 
     /// <summary>Animation clips in this project.</summary>
-    public Dictionary<AnimationId, AnimationClipDefinition> Animations { get; init; } = new();
+    public Dictionary<string, AnimationClipDefinition> Animations { get; init; } = new();
 
     /// <summary>Export profiles in this project.</summary>
-    public Dictionary<ExportProfileId, ExportProfile> ExportProfiles { get; init; } = new();
+    public Dictionary<string, ExportProfile> ExportProfiles { get; init; } = new();
 
     /// <summary>Project-level metadata.</summary>
     public ProjectMetadata Metadata { get; set; } = new();

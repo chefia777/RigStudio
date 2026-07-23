@@ -1,7 +1,7 @@
 using SkiaSharp;
-using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Exporting;
 using SpriteRigStudio.Domain.Geometry;
+using SpriteRigStudio.Domain.Masks;
 using SpriteRigStudio.Domain.Parts;
 using SpriteRigStudio.Domain.Retargeting;
 using SpriteRigStudio.Domain.Rigs;
@@ -20,6 +20,10 @@ public class FrameRenderer
 {
     private readonly IMaskRasterizer _maskRasterizer;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FrameRenderer"/> class.
+    /// </summary>
+    /// <param name="maskRasterizer">The mask rasterizer for applying polygon masks.</param>
     public FrameRenderer(IMaskRasterizer maskRasterizer)
     {
         _maskRasterizer = maskRasterizer ?? throw new ArgumentNullException(nameof(maskRasterizer));
@@ -37,7 +41,7 @@ public class FrameRenderer
         EvaluatedPose pose,
         CharacterRigDefinition character,
         ExportProfile profile,
-        IReadOnlyDictionary<string, byte[]> decodedImages)
+        IReadOnlyDictionary<string, DecodedImageInfo> decodedImages)
     {
         var width = profile.FrameWidth;
         var height = profile.FrameHeight;
@@ -60,7 +64,6 @@ public class FrameRenderer
 
         // Compute export frame-to-world transform
         var exportFrameToWorld = ComputeExportFrameTransform(profile, character.GroundAnchor);
-        var characterSetupRoot = character.SetupTransform.ToMatrix();
 
         // Get parts sorted by render order
         var orderedParts = character.SpriteParts.Values
@@ -78,25 +81,27 @@ public class FrameRenderer
             if (!pose.BoneWorldTransforms.TryGetValue(part.BoundBoneId.Value, out var boneWorld))
                 continue;
 
-            // Get decoded image data
-            if (!decodedImages.TryGetValue(part.ImageReference, out var imageData))
+            // Get decoded image data (includes width, height, and RGBA pixels)
+            if (!decodedImages.TryGetValue(part.ImageReference, out var imageInfo))
                 continue;
 
             // Compute part local transform (including pivot)
             var partLocalMatrix = ComputePartLocalMatrix(part);
 
-            // Compute final part world transform using TransformComposition
-            // For animation, boneWorld already includes animation deltas
+            // Compose the final part world transform.
+            // The EvaluatedPose.BoneWorldTransforms already includes all of:
+            //   characterSetupRoot, boneSetupWorld, boneAnimationDelta, characterCorrection
+            // so we pass Identity for characterSetupRoot to avoid double-applying.
             var partWorld = TransformComposition.ComputePartWorldTransform(
                 exportFrameToWorld,
-                characterSetupRoot,
-                boneWorld,        // boneSetupWorld already includes animation in animated pose
-                Matrix3x2D.Identity,  // boneAnimationDelta is baked into boneWorld
-                Matrix3x2D.Identity,  // characterCorrection is baked into boneWorld
+                Matrix3x2D.Identity,   // baked into boneWorld
+                boneWorld,             // includes setup root, bone hierarchy, animation, corrections
+                Matrix3x2D.Identity,
+                Matrix3x2D.Identity,
                 partLocalMatrix);
 
-            // Render the part
-            RenderPart(canvas, part, imageData, partWorld, profile);
+            // Render the part with optional mask
+            RenderPart(canvas, part, imageInfo, partWorld, character, _maskRasterizer);
         }
 
         // Snapshot to RGBA bytes
@@ -117,10 +122,10 @@ public class FrameRenderer
     private static Matrix3x2D ComputePartLocalMatrix(SpritePartDefinition part)
     {
         // Part local transform consists of:
-        // 1. Translate by pivot (so pivot aligns to bone origin)
+        // 1. Translate so that pivot aligns to bone origin (translate by -pivot)
         // 2. Apply local setup transform (position, rotation, scale relative to bone)
         //
-        // The pivot is in source image space. We need to translate so that
+        // The pivot is in source image space. We translate so that
         // the pivot point maps to the bone attachment point.
         var pivotTranslation = Matrix3x2D.CreateTranslation(-part.Pivot);
         var localTransform = part.LocalSetupTransform.ToMatrix();
@@ -129,130 +134,79 @@ public class FrameRenderer
     }
 
     /// <summary>
-    /// Renders a single sprite part onto the canvas.
+    /// Renders a single sprite part onto the canvas, applying mask if specified.
     /// </summary>
     private static void RenderPart(
         SKCanvas canvas,
         SpritePartDefinition part,
-        byte[] imageData,
+        DecodedImageInfo imageInfo,
         Matrix3x2D worldTransform,
-        ExportProfile profile)
+        CharacterRigDefinition character,
+        IMaskRasterizer maskRasterizer)
     {
-        // Determine source rectangle
+        var width = imageInfo.Width;
+        var height = imageInfo.Height;
+        var pixels = imageInfo.RgbaPixels;
+
+        // Apply mask if the part references one
+        if (part.MaskId.HasValue &&
+            character.Masks.TryGetValue(part.MaskId.Value.ToString("N"), out var mask) &&
+            mask.Enabled &&
+            mask.OuterContour.Count >= 3)
+        {
+            pixels = maskRasterizer.ApplyMask(pixels, width, height, mask, antialias: true);
+        }
+
+        // Determine source rectangle (sub-region within the source image)
         var srcRect = part.SourceRectangle;
 
-        // Create an SKBitmap from the raw pixel data
-        // We need width/height - infer from the part or pass separately
-        // For this implementation, we assume the full image is used
-        // and source rectangle (if specified) defines the sub-region.
-        //
-        // Since we don't have the image dimensions here, we'd need them
-        // from the DecodedImageInfo. In practice, the caller should pass
-        // dimensions alongside pixel data. For simplicity, we use the
-        // SourceRectangle if provided, otherwise fallback.
-
-        // Note: In a production implementation, the decodedImages dictionary
-        // should contain DecodedImageInfo objects (with Width/Height) rather
-        // than raw byte arrays. Here we use imageData as a raw bitmap.
-        // The size is inferred from the source rectangle.
-
-        if (srcRect.HasValue)
-        {
-            var rect = srcRect.Value;
-            var sw = (int)rect.Width;
-            var sh = (int)rect.Height;
-
-            // Extract sub-region from image data
-            using var srcBitmap = CreateBitmapFromSubRegion(imageData, (int)rect.X, (int)rect.Y, sw, sh);
-            if (srcBitmap is null)
-                return;
-
-            DrawSkewedBitmap(canvas, srcBitmap, worldTransform, part.Opacity);
-        }
-        else
-        {
-        // No source rectangle specified - try to decode as full image
-        // This is a simplified approach; production code should use proper image dimensions
-        var size = (int)Math.Sqrt(imageData.Length / 4);
-        if (size <= 0) return;
-
-        using var srcBitmap = new SKBitmap(size, size, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        // Create SKBitmap from the (possibly masked) pixels
+        using var srcBitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         var destPtr = srcBitmap.GetPixels();
-        System.Runtime.InteropServices.Marshal.Copy(imageData, 0, destPtr, imageData.Length);
-
-        DrawSkewedBitmap(canvas, srcBitmap, worldTransform, part.Opacity);
-        }
-    }
-
-    /// <summary>
-    /// Creates a bitmap from a sub-region of a larger image buffer.
-    /// </summary>
-    private static SKBitmap? CreateBitmapFromSubRegion(byte[] sourceData, int srcX, int srcY, int width, int height)
-    {
-        // This requires knowing the source image dimensions.
-        // For a proper implementation, the caller should provide this info.
-        // Simplified fallback: assume square root layout.
-        var srcWidth = (int)Math.Sqrt(sourceData.Length / 4);
-        if (srcWidth == 0) return null;
-
-        var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                var srcIdx = ((srcY + y) * srcWidth + (srcX + x)) * 4;
-                if (srcIdx + 3 >= sourceData.Length)
-                    continue;
-
-                var color = new SKColor(
-                    sourceData[srcIdx],
-                    sourceData[srcIdx + 1],
-                    sourceData[srcIdx + 2],
-                    sourceData[srcIdx + 3]);
-
-                bitmap.SetPixel(x, y, color);
-            }
-        }
-
-        return bitmap;
-    }
-
-    /// <summary>
-    /// Draws a bitmap onto the canvas using the provided transform matrix.
-    /// Supports rotation, scaling, translation, and skew through the matrix.
-    /// </summary>
-    private static void DrawSkewedBitmap(SKCanvas canvas, SKBitmap bitmap, Matrix3x2D transform, double opacity)
-    {
-        using var paint = new SKPaint
-        {
-            IsAntialias = true,
-            FilterQuality = SKFilterQuality.Medium
-        };
-
-        // Apply opacity
-        if (opacity < 1.0)
-        {
-            paint.Color = paint.Color.WithAlpha((byte)(opacity * 255));
-        }
+        System.Runtime.InteropServices.Marshal.Copy(pixels, 0, destPtr, pixels.Length);
 
         // Convert Matrix3x2D to SkiaSharp matrix
         var skMatrix = new SKMatrix
         {
-            ScaleX = (float)transform.M11,
-            SkewY = (float)transform.M12,
-            SkewX = (float)transform.M21,
-            ScaleY = (float)transform.M22,
-            TransX = (float)transform.M31,
-            TransY = (float)transform.M32,
+            ScaleX = (float)worldTransform.M11,
+            SkewY = (float)worldTransform.M12,
+            SkewX = (float)worldTransform.M21,
+            ScaleY = (float)worldTransform.M22,
+            TransX = (float)worldTransform.M31,
+            TransY = (float)worldTransform.M32,
             Persp0 = 0,
             Persp1 = 0,
             Persp2 = 1
         };
 
+        using var paint = new SKPaint
+        {
+            IsAntialias = true,
+        };
+
+        // Apply opacity
+        if (part.Opacity < 1.0)
+        {
+            paint.Color = paint.Color.WithAlpha((byte)(part.Opacity * 255));
+        }
+
+        canvas.Save();
         canvas.SetMatrix(skMatrix);
-        canvas.DrawBitmap(bitmap, 0, 0, paint);
-        canvas.ResetMatrix();
+
+        if (srcRect.HasValue)
+        {
+            var rect = srcRect.Value;
+            var srcSkRect = new SKRect((float)rect.X, (float)rect.Y, (float)rect.Right, (float)rect.Bottom);
+            // Destination is the source rect size placed at origin; the matrix handles positioning
+            var dstSkRect = new SKRect(0, 0, (float)rect.Width, (float)rect.Height);
+            canvas.DrawBitmap(srcBitmap, srcSkRect, dstSkRect, paint);
+        }
+        else
+        {
+            canvas.DrawBitmap(srcBitmap, 0, 0, paint);
+        }
+
+        canvas.Restore();
     }
 
     /// <summary>

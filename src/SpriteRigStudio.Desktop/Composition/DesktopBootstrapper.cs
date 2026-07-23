@@ -9,6 +9,7 @@ using SpriteRigStudio.Application.Retargeting;
 using SpriteRigStudio.Application.Rigs;
 using SpriteRigStudio.Application.Skeletons;
 using SpriteRigStudio.Application.Validation;
+using SpriteRigStudio.Desktop.Platform;
 using SpriteRigStudio.Desktop.Tools;
 using SpriteRigStudio.Desktop.ViewModels;
 using SpriteRigStudio.Infrastructure.FileSystem;
@@ -65,6 +66,9 @@ public static class DesktopBootstrapper
         services.AddSingleton<RetargetingService>();
         services.AddSingleton<ExportService>();
         services.AddSingleton<ProjectValidator>();
+
+        // ── Platform ─────────────────────────────────────────────
+        services.AddSingleton<IWindowProvider, AvaloniaWindowProvider>();
 
         // ── Tools ────────────────────────────────────────────────
         services.AddSingleton<ToolManager>();

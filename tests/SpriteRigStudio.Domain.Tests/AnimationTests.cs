@@ -192,7 +192,7 @@ public class AnimationTests
         var boneId = BoneId.New();
 
         // Act
-        var hasTrack = anim.BoneTracks.TryGetValue(boneId, out var track);
+        var hasTrack = anim.BoneTracks.TryGetValue(boneId.ToKeyString(), out var track);
 
         // Assert
         hasTrack.Should().BeFalse();

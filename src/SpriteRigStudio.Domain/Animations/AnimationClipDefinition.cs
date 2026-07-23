@@ -29,7 +29,7 @@ public class AnimationClipDefinition
     public LoopMode LoopMode { get; set; } = LoopMode.Loop;
 
     /// <summary>Per-bone animation tracks.</summary>
-    public Dictionary<BoneId, BoneTrack> BoneTracks { get; init; } = new();
+    public Dictionary<string, BoneTrack> BoneTracks { get; init; } = new();
 
     /// <summary>Animation events at specific times.</summary>
     public List<AnimationEvent> Events { get; init; } = new();

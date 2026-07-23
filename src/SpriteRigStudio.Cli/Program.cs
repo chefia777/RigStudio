@@ -343,7 +343,7 @@ public class Program
 
             foreach (var animation in matchingAnimations)
             {
-                var result = await PerformExport(project, projectPath, character, animation, profile, exportService, logger);
+                var result = await PerformExport(project, projectPath, character, animation, profile, exportService, logger, sp);
                 if (result.IsSuccess)
                 {
                     CliFormatter.WriteSuccess($"  Exported: {character.Name} / {animation.Name} -> {result.OutputPath}");
@@ -420,7 +420,7 @@ public class Program
 
         foreach (var animation in matchingAnimations)
         {
-            var result = await PerformExport(project, projectPath, character, animation, profile, exportService, logger);
+            var result = await PerformExport(project, projectPath, character, animation, profile, exportService, logger, sp);
             if (result.IsSuccess)
             {
                 CliFormatter.WriteSuccess($"  Exported: {animation.Name} -> {result.OutputPath}");
@@ -499,7 +499,7 @@ public class Program
 
         CliFormatter.WriteInfo($"Exporting animation '{animation.Name}' for character '{character.Name}' using profile '{profile.Name}'...");
 
-        var result = await PerformExport(project, projectPath, character, animation, profile, exportService, logger);
+        var result = await PerformExport(project, projectPath, character, animation, profile, exportService, logger, sp);
 
         Console.WriteLine();
         if (result.IsSuccess)
@@ -532,7 +532,8 @@ public class Program
         AnimationClipDefinition animation,
         ExportProfile profile,
         ExportService exportService,
-        ILogger logger)
+        ILogger logger,
+        IServiceProvider services)
     {
         try
         {
@@ -556,35 +557,63 @@ public class Program
             // 4. Calculate frame count
             int frameCount = animation.FrameCount;
 
-            // ── Actual rendering pipeline ──────────────────────
-            // The following code demonstrates the intended integration with the
-            // rendering layer. It is architecture-correct but the rendering pipeline
-            // is not yet fully wired for CLI usage:
-            //
-            //   var renderer = serviceProvider.GetRequiredService<FrameRenderer>();
-            //   var composer = serviceProvider.GetRequiredService<SpritesheetComposer>();
-            //   var poseEvaluator = serviceProvider.GetRequiredService<IRigPoseEvaluator>();
-            //   var encoder = serviceProvider.GetRequiredService<IImageEncoder>();
-            //
-            //   // Evaluate poses for each frame
-            //   for (int frameIdx = 0; frameIdx < frameCount; frameIdx++)
-            //   {
-            //       var time = frameIdx / (double)animation.FramesPerSecond;
-            //       var pose = poseEvaluator.EvaluatePose(character, animation, time);
-            //       var framePixels = renderer.RenderFrame(pose, character, profile, decodedImages);
-            //       // Save individual frame or add to spritesheet
-            //   }
-            //
-            //   // Compose and encode spritesheet
-            //   var sheetImage = composer.Compose(frames, profile);
-            //   encoder.EncodeToFile(sheetImage, outputPaths.SpritesheetPath);
+            // 5. Resolve rendering services
+            var poseEvaluator = services.GetRequiredService<IRigPoseEvaluator>();
+            var frameRenderer = services.GetRequiredService<FrameRenderer>();
+            var spritesheetComposer = services.GetRequiredService<SpritesheetComposer>();
+            var imageEncoder = services.GetRequiredService<IImageEncoder>();
+            var imageDecoder = services.GetRequiredService<IImageDecoder>();
 
-            CliFormatter.WriteWarning(
-                $"  Rendering pipeline not yet connected. " +
-                $"Output directory prepared at: {outputPaths.ExportsDirectory} " +
-                $"({frameCount} frames expected).");
+            // 6. Decode all images referenced by character parts
+            var decodedImages = new Dictionary<string, DecodedImageInfo>();
+            foreach (var part in character.SpriteParts.Values)
+            {
+                if (string.IsNullOrEmpty(part.ImageReference) || decodedImages.ContainsKey(part.ImageReference))
+                    continue;
+                var imagePath = Path.Combine(projectDirectory, part.ImageReference);
+                var decodeResult = await imageDecoder.DecodeAsync(imagePath);
+                if (decodeResult.IsSuccess && decodeResult.Value is not null)
+                    decodedImages[part.ImageReference] = decodeResult.Value;
+            }
 
-            // 5. Create a metadata file as a placeholder demonstrating the pattern
+            // 7. Get skeleton
+            if (!project.Skeletons.TryGetValue(character.SkeletonId.ToKeyString(), out var skeleton))
+            {
+                return Domain.Common.ExportResult.Failure("SKELETON_NOT_FOUND",
+                    $"Skeleton {character.SkeletonId} not found for character '{character.Name}'.");
+            }
+
+            // 8. Evaluate and render each frame
+            var frames = new List<byte[]>(frameCount);
+            for (int frameIdx = 0; frameIdx < frameCount; frameIdx++)
+            {
+                var time = frameIdx / (double)animation.FramesPerSecond;
+                var pose = poseEvaluator.EvaluateAnimationPose(skeleton, character, animation, time);
+                var framePixels = frameRenderer.RenderFrame(pose, character, profile, decodedImages);
+                frames.Add(framePixels);
+            }
+
+            // 9. Compose spritesheet
+            var sheetPixels = spritesheetComposer.ComposeSpritesheet(
+                frames,
+                profile.Columns,
+                profile.Rows,
+                profile.FrameWidth,
+                profile.FrameHeight);
+
+            // 10. Write PNG file
+            var encodeResult = await imageEncoder.EncodePngToFileAsync(
+                outputPaths.SpritesheetPath,
+                profile.SheetWidth,
+                profile.SheetHeight,
+                sheetPixels);
+            if (encodeResult.IsFailure)
+            {
+                return Domain.Common.ExportResult.Failure("PNG_ENCODE_FAILED",
+                    $"Failed to write spritesheet: {encodeResult.ErrorMessage}");
+            }
+
+            // 11. Write metadata JSON
             var metadata = new
             {
                 project = project.Name,
@@ -594,10 +623,12 @@ public class Program
                 frames = frameCount,
                 frameWidth = profile.FrameWidth,
                 frameHeight = profile.FrameHeight,
-                timestamp = DateTime.UtcNow.ToString("O"),
-                pipelineStatus = "Placeholder — rendering pipeline not yet connected"
+                sheetWidth = profile.SheetWidth,
+                sheetHeight = profile.SheetHeight,
+                columns = profile.Columns,
+                rows = profile.Rows,
+                timestamp = DateTime.UtcNow.ToString("O")
             };
-
             var metadataJson = System.Text.Json.JsonSerializer.Serialize(metadata,
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(outputPaths.MetadataPath, metadataJson);
