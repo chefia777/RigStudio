@@ -19,10 +19,15 @@ public partial class App : Avalonia.Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var services = DesktopBootstrapper.BuildServiceProvider();
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = services.GetRequiredService<ViewModels.MainWindowViewModel>()
-            };
+
+            // Create and assign MainWindow to lifetime FIRST so IWindowProvider
+            // can resolve it before the ViewModel is constructed.
+            var mainWindow = new MainWindow();
+            desktop.MainWindow = mainWindow;
+
+            // Now resolve the ViewModel (it needs IWindowProvider to work)
+            mainWindow.DataContext = services.GetRequiredService<ViewModels.MainWindowViewModel>();
+            desktop.MainWindow = mainWindow;
         }
 
         base.OnFrameworkInitializationCompleted();

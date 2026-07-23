@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Windows.Input;
@@ -14,7 +15,9 @@ using SpriteRigStudio.Desktop.Platform;
 using SpriteRigStudio.Domain.Animations;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Exporting;
+using SpriteRigStudio.Domain.Geometry;
 using SpriteRigStudio.Domain.Projects;
+using SpriteRigStudio.Domain.Retargeting;
 using SpriteRigStudio.Domain.Rigs;
 using SpriteRigStudio.Domain.Skeletons;
 using SpriteRigStudio.Infrastructure.Serialization;
@@ -111,6 +114,17 @@ public class MainWindowViewModel : ReactiveObject
         ExportAllCommand = ReactiveCommand.CreateFromTask(ExportAllAsync);
         SwitchWorkspaceCommand = ReactiveCommand.Create<string>(SwitchWorkspace);
         SetActiveToolCommand = ReactiveCommand.Create<string>(SetActiveTool);
+
+        // Load default skeleton pose so viewport shows something at startup
+        var defaultSkeleton = DefaultHumanoidSkeleton.Create();
+        var defaultRig = new CharacterRigDefinition
+        {
+            Name = "Default",
+            SkeletonId = defaultSkeleton.SkeletonId,
+            SetupTransform = new CharacterSetupTransform(),
+            GroundAnchor = defaultSkeleton.DefaultGroundAnchor
+        };
+        CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(defaultSkeleton, defaultRig);
     }
 
     // --- Active workspace ---
@@ -213,6 +227,16 @@ public class MainWindowViewModel : ReactiveObject
 
     public InspectorViewModel Inspector => _inspector;
 
+    // --- Evaluated pose for the viewport ---
+
+    private EvaluatedPose? _currentPose;
+
+    public EvaluatedPose? CurrentPose
+    {
+        get => _currentPose;
+        set => this.RaiseAndSetIfChanged(ref _currentPose, value);
+    }
+
     // --- Commands ---
 
     public ICommand NewProjectCommand { get; }
@@ -267,6 +291,7 @@ var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPick
                 IsDirty = false;
                 StatusMessage = "New project created.";
                 UpdateProjectPanel();
+                EvaluateProjectPose(result.Project);
                 this.RaisePropertyChanged(nameof(Title));
             }
             else
@@ -306,6 +331,7 @@ var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPick
                 IsDirty = false;
                 StatusMessage = $"Opened project: {result.Project.Name}";
                 UpdateProjectPanel();
+                EvaluateProjectPose(result.Project);
                 this.RaisePropertyChanged(nameof(Title));
             }
             else
@@ -555,6 +581,24 @@ var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPick
 
         foreach (var profile in _activeProject.ExportProfiles.Values)
             _projectPanel.ExportProfiles.Add(new ExportProfileItem(profile.ExportProfileId, profile.Name));
+    }
+
+    /// <summary>
+    /// Evaluates the setup pose from the first skeleton in a project and updates the viewport.
+    /// </summary>
+    private void EvaluateProjectPose(SpriteRigProject project)
+    {
+        var skeleton = project.Skeletons.Values.FirstOrDefault();
+        if (skeleton == null) return;
+
+        var rig = new CharacterRigDefinition
+        {
+            Name = "Character",
+            SkeletonId = skeleton.SkeletonId,
+            SetupTransform = new CharacterSetupTransform(),
+            GroundAnchor = skeleton.DefaultGroundAnchor
+        };
+        CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(skeleton, rig);
     }
 
     private static string GetDefaultProjectDirectory()
