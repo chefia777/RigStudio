@@ -202,16 +202,31 @@ public class MainWindowViewModel : ReactiveObject
                 OnSelectedProfileChanged();
         };
 
-        // Load default skeleton pose so viewport shows something at startup
-        var defaultSkeleton = DefaultHumanoidSkeleton.Create();
+        // Create an in-memory project on startup so users can immediately
+        // create characters, animations, and use the tools without saving first.
+        var startupProject = new SpriteRigProject
+        {
+            Name = "Untitled Project",
+            FormatVersion = 1,
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        };
+        var startupSkeleton = DefaultHumanoidSkeleton.Create();
+        startupProject.Skeletons[startupSkeleton.SkeletonId.ToKeyString()] = startupSkeleton;
+        ActiveProject = startupProject;
+        ActiveSkeleton = startupSkeleton;
+        IsDirty = true;
+
+        // Build a default setup pose from the skeleton
         var defaultRig = new CharacterRigDefinition
         {
-            Name = "Default",
-            SkeletonId = defaultSkeleton.SkeletonId,
+            Name = "Default View",
+            SkeletonId = startupSkeleton.SkeletonId,
             SetupTransform = new CharacterSetupTransform(),
-            GroundAnchor = defaultSkeleton.DefaultGroundAnchor
+            GroundAnchor = startupSkeleton.DefaultGroundAnchor
         };
-        CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(defaultSkeleton, defaultRig);
+        CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(startupSkeleton, defaultRig);
+        UpdateProjectPanel();
 
         // Check for recovery sessions
         CheckRecoveryAsync().FireAndForget();
@@ -468,41 +483,42 @@ public class MainWindowViewModel : ReactiveObject
 
     // --- Command implementations ---
 
-    private async Task NewProjectAsync()
+    private Task NewProjectAsync()
     {
         try
         {
-            var window = _windowProvider.GetMainWindow();
-            if (window == null)
+            // Create a new in-memory project immediately — no folder picker needed.
+            // User can save later via Save/SaveAs which will prompt for a directory.
+            var project = new SpriteRigProject
             {
-                StatusMessage = "Cannot open dialog: no active window.";
-                return;
-            }
+                Name = "Untitled Project",
+                FormatVersion = 1,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+            var skeleton = DefaultHumanoidSkeleton.Create();
+            project.Skeletons[skeleton.SkeletonId.ToKeyString()] = skeleton;
 
-            var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Project Directory", AllowMultiple = false });
-            var selectedPath = folders?.FirstOrDefault()?.Path?.LocalPath;
-            if (string.IsNullOrEmpty(selectedPath))
-                return;
+            ActiveProject = project;
+            ActiveSkeleton = skeleton;
+            IsDirty = true;
 
-            var result = await _projectService.CreateProjectAsync("Untitled Project", selectedPath);
-            if (result.IsSuccess && result.Project != null)
-            {
-                ActiveProject = result.Project;
-                IsDirty = false;
-                StatusMessage = "New project created.";
-                UpdateProjectPanel();
-                EvaluateProjectPose(result.Project);
-                this.RaisePropertyChanged(nameof(Title));
-            }
-            else
-            {
-                StatusMessage = $"Failed to create project: {result.ErrorMessage}";
-            }
+            // Clear undo/redo stacks for fresh project
+            _undoStack.Clear();
+            _redoStack.Clear();
+            CanUndo = false;
+            CanRedo = false;
+
+            UpdateProjectPanel();
+            EvaluateProjectPose(project);
+            this.RaisePropertyChanged(nameof(Title));
+            StatusMessage = "New project created. Use Save to save to disk.";
         }
         catch (Exception ex)
         {
             StatusMessage = $"Error: {ex.Message}";
         }
+        return Task.CompletedTask;
     }
 
     private async Task OpenProjectAsync()
@@ -959,12 +975,14 @@ public class MainWindowViewModel : ReactiveObject
         string? artworkRef = null;
         if (!string.IsNullOrEmpty(artworkPath) && File.Exists(artworkPath))
         {
-            var sourcesDir = System.IO.Path.Combine(_activeProject.ProjectDirectory!, "Sources");
+            var sourcesDir = _activeProject.ProjectDirectory != null
+                ? System.IO.Path.Combine(_activeProject.ProjectDirectory, "Sources")
+                : System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SpriteRigStudio", "Unsaved", "Sources");
             Directory.CreateDirectory(sourcesDir);
             var fileName = $"{name.ToLowerInvariant().Replace(' ', '_')}.png";
             var destPath = System.IO.Path.Combine(sourcesDir, fileName);
             File.Copy(artworkPath, destPath, overwrite: true);
-            artworkRef = $"Sources/{fileName}";
+            artworkRef = System.IO.Path.Combine(sourcesDir, fileName);
         }
 
         var character = _rigService.CreateCharacterRig(name, skeletonId, artworkRef);
