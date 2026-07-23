@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SpriteRigStudio.Application\SpriteRigStudio.Application.csproj" />
+    <ProjectReference Include="..\..\src\SpriteRigStudio.Infrastructure\SpriteRigStudio.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

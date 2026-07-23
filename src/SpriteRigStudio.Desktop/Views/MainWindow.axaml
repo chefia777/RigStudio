@@ -8,6 +8,26 @@
         Height="800"
         MinWidth="1024"
         MinHeight="600">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveProjectAsCommand}" />
+    <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
+    <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
+    <KeyBinding Gesture="Space" Command="{Binding PlayPauseCommand}" />
+    <KeyBinding Gesture="Left" Command="{Binding PreviousFrameCommand}" />
+    <KeyBinding Gesture="Right" Command="{Binding NextFrameCommand}" />
+    <KeyBinding Gesture="Delete" Command="{Binding DeleteBoneCommand}" />
+    <KeyBinding Gesture="Escape" Command="{Binding CancelToolCommand}" />
+    <KeyBinding Gesture="F" Command="{Binding FitViewportCommand}" />
+    <KeyBinding Gesture="W" Command="{Binding SetActiveToolCommand}" CommandParameter="MoveRig" />
+    <KeyBinding Gesture="R" Command="{Binding SetActiveToolCommand}" CommandParameter="RotateRig" />
+    <KeyBinding Gesture="E" Command="{Binding SetActiveToolCommand}" CommandParameter="ScaleRig" />
+    <KeyBinding Gesture="M" Command="{Binding SetActiveToolCommand}" CommandParameter="MoveJoint" />
+    <KeyBinding Gesture="P" Command="{Binding SetActiveToolCommand}" CommandParameter="Select" />
+    <KeyBinding Gesture="A" Command="{Binding SetActiveToolCommand}" CommandParameter="Anchor" />
+  </Window.KeyBindings>
   <DockPanel>
     <!-- Main Menu -->
     <Menu DockPanel.Dock="Top">
@@ -35,6 +55,16 @@
         <MenuItem Header="Show A_rtwork" IsChecked="True" />
         <MenuItem Header="Show _Masks" />
         <MenuItem Header="Show _Guides" IsChecked="True" />
+        <Separator />
+        <MenuItem Header="Workspace">
+          <MenuItem Header="Project" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="Project" />
+          <MenuItem Header="Skeleton" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="Skeleton" />
+          <MenuItem Header="Character Rig" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="CharacterRig" />
+          <MenuItem Header="Part Masks" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="PartMasks" />
+          <MenuItem Header="Animation" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="Animation" />
+          <MenuItem Header="Preview" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="Preview" />
+          <MenuItem Header="Export" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="Export" />
+        </MenuItem>
       </MenuItem>
       <MenuItem Header="_Project">
         <MenuItem Header="Project _Settings..." />

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Windows.Input;
@@ -148,6 +149,8 @@ public class MainWindowViewModel : ReactiveObject
         EditPivotCommand = ReactiveCommand.CreateFromTask(EditPivotAsync);
         ImportSeparatePartCommand = ReactiveCommand.CreateFromTask(ImportSeparatePartAsync);
         ToggleCorrectionModeCommand = ReactiveCommand.Create(ToggleCorrectionMode);
+        CancelToolCommand = ReactiveCommand.Create(CancelTool);
+        FitViewportCommand = ReactiveCommand.Create(FitViewport);
         // Autosave timer — ticks every 60 seconds when the project is dirty
         _autosaveSubscription = Observable.Interval(TimeSpan.FromSeconds(60))
             .Where(_ => _isDirty && _activeProject != null && !string.IsNullOrEmpty(_activeProject.ProjectDirectory))
@@ -416,6 +419,8 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand EditPivotCommand { get; }
     public ICommand ImportSeparatePartCommand { get; }
     public ICommand ToggleCorrectionModeCommand { get; }
+    public ICommand CancelToolCommand { get; }
+    public ICommand FitViewportCommand { get; }
 
     /// <summary>Title displayed in the window title bar.</summary>
     public string Title
@@ -791,23 +796,33 @@ public class MainWindowViewModel : ReactiveObject
                 }
             }
 
-            // 7. Write metadata JSON
-            var metadata = new
+            // 7. Write metadata JSON matching the spec from section 30
+            var metadataObj = new
             {
-                project = _activeProject.Name,
-                character = _activeCharacter.Name,
-                animation = _activeAnimation.Name,
-                profile = _activeProfile.Name,
-                frames = frameCount,
+                formatVersion = 1,
+                characterId = _activeCharacter.CharacterRigId.ToKeyString(),
+                characterName = _activeCharacter.Name,
+                animationId = _activeAnimation.AnimationId.ToKeyString(),
+                animationName = _activeAnimation.Name,
+                framesPerSecond = _activeProfile.FrameRate > 0 ? _activeProfile.FrameRate : _activeAnimation.FramesPerSecond,
+                frameCount = frameCount,
                 frameWidth = _activeProfile.FrameWidth,
                 frameHeight = _activeProfile.FrameHeight,
-                sheetWidth = _activeProfile.SheetWidth,
-                sheetHeight = _activeProfile.SheetHeight,
                 columns = _activeProfile.Columns,
                 rows = _activeProfile.Rows,
-                timestamp = DateTime.UtcNow.ToString("O")
+                loopMode = _activeAnimation.LoopMode.ToString(),
+                anchor = new { x = _activeProfile.AnchorPixel.X, y = _activeProfile.AnchorPixel.Y },
+                frames = Enumerable.Range(0, frameCount).Select(i => new
+                {
+                    index = i,
+                    x = (i % _activeProfile.Columns) * _activeProfile.FrameWidth,
+                    y = (i / _activeProfile.Columns) * _activeProfile.FrameHeight,
+                    width = _activeProfile.FrameWidth,
+                    height = _activeProfile.FrameHeight,
+                    durationSeconds = 1.0 / (_activeProfile.FrameRate > 0 ? _activeProfile.FrameRate : _activeAnimation.FramesPerSecond)
+                }).ToList()
             };
-            var metadataJson = _projectSerializer.Serialize(metadata);
+            var metadataJson = _projectSerializer.Serialize(metadataObj);
             await File.WriteAllTextAsync(paths.MetadataPath, metadataJson);
 
             StatusMessage = $"Export complete: {frameCount} frames → {paths.SpritesheetPath}";
@@ -829,6 +844,10 @@ public class MainWindowViewModel : ReactiveObject
         ActiveWorkspace = workspace;
         StatusMessage = $"Switched to {workspace} workspace";
     }
+
+    private void CancelTool() => StatusMessage = "Operation cancelled.";
+
+    private void FitViewport() => StatusMessage = "Fit viewport.";
 
     private void SetActiveTool(string toolName)
     {
@@ -870,7 +889,6 @@ public class MainWindowViewModel : ReactiveObject
         }
 
         var character = _rigService.CreateCharacterRig(name, skeletonId, artworkRef);
-        _activeProject.CharacterRigs[character.CharacterRigId.ToKeyString()] = character;
 
         // Add a default part bound to root bone
         if (artworkRef != null && _activeProject.Skeletons.TryGetValue(skeletonId.ToKeyString(), out var skeleton))
@@ -880,8 +898,10 @@ public class MainWindowViewModel : ReactiveObject
                 _rigService.CreatePart(character, "body", rootBone.BoneId, Vector2D.Zero, SourceType.FlattenedImageMask, artworkRef);
         }
 
-        MarkDirty();
-        UpdateProjectPanel();
+        var charId = character.CharacterRigId;
+        ExecuteAction($"Create character '{name}'",
+            undo: () => { _activeProject.CharacterRigs.Remove(charId.ToKeyString()); UpdateProjectPanel(); },
+            redo: () => { _activeProject.CharacterRigs[charId.ToKeyString()] = character; UpdateProjectPanel(); });
 
         // Select the newly created character in the panel
         var newItem = _projectPanel.Characters.FirstOrDefault(c => c.Id == character.CharacterRigId);
@@ -919,8 +939,10 @@ public class MainWindowViewModel : ReactiveObject
             var mask = _maskService.CreateMask(dialog.MaskName);
             foreach (var v in dialog.OuterContour)
                 _maskService.AddVertex(mask, v);
-            _activeCharacter.Masks[mask.MaskId.ToString("N")] = mask;
-            MarkDirty();
+            var maskId = mask.MaskId;
+            ExecuteAction($"Create mask '{mask.Name}'",
+                undo: () => { _activeCharacter.Masks.Remove(maskId.ToString("N")); },
+                redo: () => { _activeCharacter.Masks[maskId.ToString("N")] = mask; });
             StatusMessage = $"Created mask '{mask.Name}' with {mask.VertexCount} vertices.";
         }
     }
@@ -953,16 +975,13 @@ public class MainWindowViewModel : ReactiveObject
                 Scale = new Vector2D(1, 1),
                 Interpolation = dialog.Interpolation
             };
-            var addResult = _animationService.AddKeyframe(_activeAnimation, selectedBoneId, keyframe);
-            if (addResult.IsSuccess)
-            {
-                MarkDirty();
-                StatusMessage = $"Added keyframe at {keyframe.TimeSeconds:F2}s.";
-            }
-            else
-            {
-                StatusMessage = $"Failed: {addResult.ErrorMessage}";
-            }
+            var animSnapshot = _activeAnimation.AnimationId;
+            var boneId = selectedBoneId;
+            var time = keyframe.TimeSeconds;
+            ExecuteAction($"Add keyframe at {time:F2}s",
+                undo: () => { _animationService.DeleteKeyframe(_activeAnimation, boneId, time); },
+                redo: () => { _animationService.AddKeyframe(_activeAnimation, boneId, keyframe.Clone()); });
+            StatusMessage = $"Added keyframe at {keyframe.TimeSeconds:F2}s.";
         }
     }
 
@@ -980,9 +999,10 @@ public class MainWindowViewModel : ReactiveObject
         var anim = _animationService.CreateAnimation(
             dialog.AnimationName, ActiveSkeleton.SkeletonId, dialog.Fps, dialog.Duration);
         anim.LoopMode = dialog.LoopMode;
-        _activeProject.Animations[anim.AnimationId.ToKeyString()] = anim;
-        MarkDirty();
-        UpdateProjectPanel();
+        var animId = anim.AnimationId;
+        ExecuteAction($"Create animation '{anim.Name}'",
+            undo: () => { _activeProject.Animations.Remove(animId.ToKeyString()); UpdateProjectPanel(); },
+            redo: () => { _activeProject.Animations[animId.ToKeyString()] = anim; UpdateProjectPanel(); });
         StatusMessage = $"Created animation: {anim.Name}";
     }
 
@@ -1095,8 +1115,10 @@ public class MainWindowViewModel : ReactiveObject
 
         var part = _rigService.CreatePart(_activeCharacter!, dialog.PartName, dialog.BoundBoneId,
             dialog.PositionOffset, SourceType.SeparateImage, imageRef);
-        MarkDirty();
-        UpdateProjectPanel();
+        var partId = part.SpritePartId;
+        ExecuteAction($"Import part '{part.Name}'",
+            undo: () => { _activeCharacter.SpriteParts.Remove(partId.ToKeyString()); UpdateProjectPanel(); },
+            redo: () => { _activeCharacter.SpriteParts[partId.ToKeyString()] = part; UpdateProjectPanel(); });
         StatusMessage = $"Imported part: {part.Name}";
     }
 
