@@ -43,14 +43,19 @@
       <MenuItem Header="_Rig">
         <MenuItem Header="_New Skeleton..." Command="{Binding AddBoneCommand}" />
         <MenuItem Header="New _Character Rig..." Command="{Binding NewCharacterCommand}" />
+        <MenuItem Header="_Mirror Rig" Command="{Binding MirrorRigCommand}" />
+        <MenuItem Header="_Delete Bone" Command="{Binding DeleteBoneCommand}" />
+        <Separator />
         <MenuItem Header="_Import Artwork..." Command="{Binding ImportArtworkCommand}" />
         <Separator />
         <MenuItem Header="New _Part..." />
+        <MenuItem Header="_Import Separate Part..." Command="{Binding ImportSeparatePartCommand}" />
         <MenuItem Header="Create _Mask..." Command="{Binding CreateMaskCommand}" />
       </MenuItem>
       <MenuItem Header="_Animation">
         <MenuItem Header="New _Animation Clip..." Command="{Binding NewAnimationCommand}" />
         <MenuItem Header="Add _Keyframe..." Command="{Binding AddKeyframeCommand}" />
+        <MenuItem Header="Edit _Corrections" IsChecked="{Binding IsCorrectionMode}" Command="{Binding ToggleCorrectionModeCommand}" />
         <Separator />
         <MenuItem Header="_Bake Animation..." />
       </MenuItem>
@@ -190,29 +195,32 @@
 
             <!-- Part Section -->
             <Expander Header="Part" IsExpanded="True">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="80" />
-                  <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock Text="Part" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" />
-                <TextBox Text="{Binding Inspector.SelectedPartName}" Grid.Row="0" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
-                <TextBlock Text="Bone" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" />
-                <TextBox Text="{Binding Inspector.BoundBone}" Grid.Row="1" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
-                <TextBlock Text="Order" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" />
-                <TextBox Text="{Binding Inspector.RenderOrder}" Grid.Row="2" Grid.Column="1" Margin="0,2" />
-                <TextBlock Text="Pivot X" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" />
-                <TextBox Text="{Binding Inspector.PivotX}" Grid.Row="3" Grid.Column="1" Margin="0,2" />
-                <TextBlock Text="Pivot Y" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" />
-                <TextBox Text="{Binding Inspector.PivotY}" Grid.Row="4" Grid.Column="1" Margin="0,2" />
-              </Grid>
+              <StackPanel Spacing="4">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <TextBlock Text="Part" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding Inspector.SelectedPartName}" Grid.Row="0" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
+                  <TextBlock Text="Bone" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding Inspector.BoundBone}" Grid.Row="1" Grid.Column="1" IsReadOnly="True" Margin="0,2" />
+                  <TextBlock Text="Order" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding Inspector.RenderOrder}" Grid.Row="2" Grid.Column="1" Margin="0,2" />
+                  <TextBlock Text="Pivot X" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding Inspector.PivotX}" Grid.Row="3" Grid.Column="1" Margin="0,2" />
+                  <TextBlock Text="Pivot Y" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding Inspector.PivotY}" Grid.Row="4" Grid.Column="1" Margin="0,2" />
+                </Grid>
+                <Button Content="Edit Pivot..." Command="{Binding EditPivotCommand}" HorizontalAlignment="Right" Margin="0,4,0,0" />
+              </StackPanel>
             </Expander>
 
             <!-- Animation Section -->

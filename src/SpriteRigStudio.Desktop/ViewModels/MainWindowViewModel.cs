@@ -72,6 +72,7 @@ public class MainWindowViewModel : ReactiveObject
     private string _statusMessage = "Ready";
     private double _currentTime;
     private bool _isPlaying;
+    private bool _isCorrectionMode;
     private IDisposable? _playbackSubscription;
     private IDisposable? _autosaveSubscription;
     private readonly Stack<(string description, Action undo, Action redo)> _undoStack = new();
@@ -135,6 +136,8 @@ public class MainWindowViewModel : ReactiveObject
         NewCharacterCommand = ReactiveCommand.CreateFromTask(NewCharacterAsync);
         CreateMaskCommand = ReactiveCommand.CreateFromTask(CreateMaskAsync);
         AddKeyframeCommand = ReactiveCommand.CreateFromTask(AddKeyframeAsync);
+        MirrorRigCommand = ReactiveCommand.Create(MirrorRig);
+        DeleteBoneCommand = ReactiveCommand.Create(DeleteSelectedBone);
         PreviousFrameCommand = ReactiveCommand.Create(PreviousFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
         NextFrameCommand = ReactiveCommand.Create(NextFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
         GoToStartCommand = ReactiveCommand.Create(GoToStart);
@@ -142,6 +145,9 @@ public class MainWindowViewModel : ReactiveObject
         NewAnimationCommand = ReactiveCommand.CreateFromTask(NewAnimationAsync);
         AddBoneCommand = ReactiveCommand.CreateFromTask(AddBoneAsync);
         ExportDialogCommand = ReactiveCommand.CreateFromTask(ExportDialogAsync);
+        EditPivotCommand = ReactiveCommand.CreateFromTask(EditPivotAsync);
+        ImportSeparatePartCommand = ReactiveCommand.CreateFromTask(ImportSeparatePartAsync);
+        ToggleCorrectionModeCommand = ReactiveCommand.Create(ToggleCorrectionMode);
         // Autosave timer — ticks every 60 seconds when the project is dirty
         _autosaveSubscription = Observable.Interval(TimeSpan.FromSeconds(60))
             .Where(_ => _isDirty && _activeProject != null && !string.IsNullOrEmpty(_activeProject.ProjectDirectory))
@@ -195,6 +201,9 @@ public class MainWindowViewModel : ReactiveObject
             GroundAnchor = defaultSkeleton.DefaultGroundAnchor
         };
         CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(defaultSkeleton, defaultRig);
+
+        // Check for recovery sessions
+        CheckRecoveryAsync().FireAndForget();
     }
 
     private void OnSelectedSkeletonChanged()
@@ -356,6 +365,12 @@ public class MainWindowViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isPlaying, value);
     }
 
+    public bool IsCorrectionMode
+    {
+        get => _isCorrectionMode;
+        set => this.RaiseAndSetIfChanged(ref _isCorrectionMode, value);
+    }
+
     // --- Panel view models ---
 
     public ProjectPanelViewModel ProjectPanel => _projectPanel;
@@ -389,6 +404,8 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand NewCharacterCommand { get; }
     public ICommand CreateMaskCommand { get; }
     public ICommand AddKeyframeCommand { get; }
+    public ICommand MirrorRigCommand { get; }
+    public ICommand DeleteBoneCommand { get; }
     public ICommand PreviousFrameCommand { get; }
     public ICommand NextFrameCommand { get; }
     public ICommand GoToStartCommand { get; }
@@ -396,6 +413,9 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand NewAnimationCommand { get; }
     public ICommand AddBoneCommand { get; }
     public ICommand ExportDialogCommand { get; }
+    public ICommand EditPivotCommand { get; }
+    public ICommand ImportSeparatePartCommand { get; }
+    public ICommand ToggleCorrectionModeCommand { get; }
 
     /// <summary>Title displayed in the window title bar.</summary>
     public string Title
@@ -632,6 +652,25 @@ public class MainWindowViewModel : ReactiveObject
         CurrentPose = _rigPoseEvaluator.EvaluateAnimationPose(skeleton, _activeCharacter, _activeAnimation, _currentTime);
     }
 
+    private void ToggleCorrectionMode()
+    {
+        IsCorrectionMode = !IsCorrectionMode;
+        StatusMessage = IsCorrectionMode ? "Editing character corrections" : "Editing shared animation";
+    }
+
+    private async Task CheckRecoveryAsync()
+    {
+        try
+        {
+            var sessions = await _projectRepository.DetectRecoverySessionsAsync();
+            if (sessions.Count > 0)
+            {
+                StatusMessage = $"Found {sessions.Count} recoverable session(s). Use Edit → Recover to restore.";
+            }
+        }
+        catch { /* silently ignore recovery check failures */ }
+    }
+
     public void ExecuteAction(string description, Action undo, Action redo)
     {
         redo();
@@ -738,6 +777,18 @@ public class MainWindowViewModel : ReactiveObject
             {
                 StatusMessage = $"Failed to write spritesheet: {encodeResult.ErrorMessage}";
                 return;
+            }
+
+            // 6b. Export individual frames if requested
+            if (_activeProfile.IncludeIndividualFrames)
+            {
+                Directory.CreateDirectory(paths.FramesDirectory);
+                for (int i = 0; i < frames.Count; i++)
+                {
+                    var framePath = System.IO.Path.Combine(paths.FramesDirectory, $"{paths.BaseName}_{i:D3}.png");
+                    await _imageEncoder.EncodePngToFileAsync(framePath,
+                        _activeProfile.FrameWidth, _activeProfile.FrameHeight, frames[i]);
+                }
             }
 
             // 7. Write metadata JSON
@@ -935,6 +986,29 @@ public class MainWindowViewModel : ReactiveObject
         StatusMessage = $"Created animation: {anim.Name}";
     }
 
+    private void MirrorRig()
+    {
+        if (_activeCharacter == null) { StatusMessage = "Select a character."; return; }
+        ExecuteAction("Mirror rig",
+            undo: () => { _activeCharacter.SetupTransform.FlipHorizontal = !_activeCharacter.SetupTransform.FlipHorizontal; RefreshPose(); },
+            redo: () => { _activeCharacter.SetupTransform.FlipHorizontal = !_activeCharacter.SetupTransform.FlipHorizontal; RefreshPose(); });
+    }
+
+    private void DeleteSelectedBone()
+    {
+        if (ActiveSkeleton == null) { StatusMessage = "Select a skeleton."; return; }
+        var selectedId = _sessionState.SelectedBoneIds.FirstOrDefault();
+        if (selectedId == BoneId.Empty) { StatusMessage = "Select a bone to delete."; return; }
+        var bone = ActiveSkeleton.Bones.GetValueOrDefault(selectedId.ToKeyString());
+        if (bone == null) return;
+        var boneName = bone.Name;
+        ExecuteAction($"Delete bone '{boneName}'",
+            undo: () => { ActiveSkeleton.Bones[selectedId.ToKeyString()] = new BoneDefinition { BoneId = selectedId, Name = boneName, ParentBoneId = bone.ParentBoneId }; RefreshPose(); },
+            redo: () => { _skeletonService.RemoveBone(ActiveSkeleton, selectedId); RefreshPose(); });
+        _skeletonService.RemoveBone(ActiveSkeleton, selectedId);
+        StatusMessage = $"Deleted bone: {boneName}";
+    }
+
     private async Task AddBoneAsync()
     {
         if (ActiveSkeleton == null) { StatusMessage = "Select a skeleton first."; return; }
@@ -973,8 +1047,57 @@ public class MainWindowViewModel : ReactiveObject
             dialog.SelectedProfileId.ToKeyString(), out var profile))
         {
             ActiveProfile = profile;
+            profile.IncludeIndividualFrames = dialog.ExportIndividualFrames;
             await ExportAnimationAsync();
         }
+    }
+
+    private async Task EditPivotAsync()
+    {
+        if (_activeCharacter == null) { StatusMessage = "Select a character."; return; }
+        var selectedPartId = _sessionState.SelectedPartIds.FirstOrDefault();
+        if (selectedPartId == SpritePartId.Empty) { StatusMessage = "Select a part first."; return; }
+        if (!_activeCharacter.SpriteParts.TryGetValue(selectedPartId.ToKeyString(), out var part)) return;
+
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+
+        var dialog = new PivotEditorDialog(part.Pivot);
+        var result = await dialog.ShowDialog<DialogResult>(window);
+        if (result == DialogResult.Ok)
+        {
+            _rigService.UpdatePartPivot(_activeCharacter, selectedPartId, dialog.Pivot);
+            MarkDirty();
+            RefreshPose();
+            StatusMessage = $"Pivot updated to ({dialog.Pivot.X:F1}, {dialog.Pivot.Y:F1})";
+        }
+    }
+
+    private async Task ImportSeparatePartAsync()
+    {
+        if (_activeProject == null || _activeCharacter == null) { StatusMessage = "Select a character."; return; }
+        if (!_activeProject.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var skeleton)) return;
+
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+
+        var dialog = new ImportPartDialog(skeleton);
+        var result = await dialog.ShowDialog<DialogResult>(window);
+        if (result != DialogResult.Ok) return;
+
+        // Copy image into project
+        var partsDir = System.IO.Path.Combine(_activeProject.ProjectDirectory!, "Parts", _activeCharacter.Name);
+        Directory.CreateDirectory(partsDir);
+        var fileName = $"{dialog.PartName.ToLowerInvariant().Replace(' ', '_')}.png";
+        var destPath = System.IO.Path.Combine(partsDir, fileName);
+        System.IO.File.Copy(dialog.ImagePath!, destPath, overwrite: true);
+        var imageRef = $"Parts/{_activeCharacter.Name}/{fileName}";
+
+        var part = _rigService.CreatePart(_activeCharacter!, dialog.PartName, dialog.BoundBoneId,
+            dialog.PositionOffset, SourceType.SeparateImage, imageRef);
+        MarkDirty();
+        UpdateProjectPanel();
+        StatusMessage = $"Imported part: {part.Name}";
     }
 
     // --- Helpers ---
@@ -1063,7 +1186,8 @@ public class MainWindowViewModel : ReactiveObject
     }
 
     /// <summary>
-    /// Syncs the inspector panel values from the active character's setup transform.
+    /// Syncs the inspector panel values from the active character's setup transform
+    /// and selected part properties.
     /// </summary>
     public void SyncInspectorFromCharacter()
     {
@@ -1079,6 +1203,36 @@ public class MainWindowViewModel : ReactiveObject
                 _inspector.Rotation = t.RotationDegrees;
                 _inspector.ScaleX = t.UniformScale;
                 _inspector.ScaleY = t.UniformScale;
+
+                // Sync selected part properties
+                var selectedPartId = _sessionState.SelectedPartIds.FirstOrDefault();
+                if (selectedPartId != SpritePartId.Empty &&
+                    _activeCharacter.SpriteParts.TryGetValue(selectedPartId.ToKeyString(), out var part))
+                {
+                    _inspector.SelectedPartName = part.Name;
+                    _inspector.RenderOrder = part.RenderOrder;
+                    _inspector.PivotX = part.Pivot.X.ToString("F1");
+                    _inspector.PivotY = part.Pivot.Y.ToString("F1");
+
+                    if (part.BoundBoneId.HasValue && _activeProject != null &&
+                        _activeProject.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var skeleton) &&
+                        skeleton.Bones.TryGetValue(part.BoundBoneId.Value.ToKeyString(), out var bone))
+                    {
+                        _inspector.BoundBone = bone.Name;
+                    }
+                    else
+                    {
+                        _inspector.BoundBone = string.Empty;
+                    }
+                }
+                else
+                {
+                    _inspector.SelectedPartName = string.Empty;
+                    _inspector.RenderOrder = 0;
+                    _inspector.PivotX = string.Empty;
+                    _inspector.PivotY = string.Empty;
+                    _inspector.BoundBone = string.Empty;
+                }
             }
         }
         finally
@@ -1097,6 +1251,17 @@ public class MainWindowViewModel : ReactiveObject
         _isSyncingInspector = true;
         try
         {
+            if (e.PropertyName == nameof(InspectorViewModel.RenderOrder))
+            {
+                var selectedPartId = _sessionState.SelectedPartIds.FirstOrDefault();
+                if (selectedPartId != SpritePartId.Empty)
+                {
+                    _rigService.UpdatePartRenderOrder(_activeCharacter, selectedPartId, _inspector.RenderOrder);
+                    MarkDirty();
+                }
+                return;
+            }
+
             var t = _activeCharacter.SetupTransform;
             switch (e.PropertyName)
             {

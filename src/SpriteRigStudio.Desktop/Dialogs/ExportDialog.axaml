@@ -17,6 +17,8 @@
       <ComboBox x:Name="ProfileCombo" Grid.Row="2" Grid.Column="1" />
     </Grid>
 
+    <CheckBox x:Name="ExportFramesCheck" Content="Export individual frames" IsChecked="False" Margin="0,8,0,0" />
+
     <ProgressBar x:Name="ProgressBar" IsVisible="False" Margin="0,8" />
 
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">

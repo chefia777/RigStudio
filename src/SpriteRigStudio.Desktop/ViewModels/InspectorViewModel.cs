@@ -23,7 +23,7 @@ public class InspectorViewModel : ReactiveObject
     // --- Part section ---
     private string _selectedPartName = string.Empty;
     private string _boundBone = string.Empty;
-    private string _renderOrder = string.Empty;
+    private int _renderOrder;
     private string _pivotX = string.Empty;
     private string _pivotY = string.Empty;
 
@@ -100,7 +100,7 @@ public class InspectorViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _boundBone, value);
     }
 
-    public string RenderOrder
+    public int RenderOrder
     {
         get => _renderOrder;
         set => this.RaiseAndSetIfChanged(ref _renderOrder, value);

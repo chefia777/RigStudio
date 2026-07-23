@@ -17,6 +17,9 @@ public partial class ExportDialog : Window
     /// <summary>Export profile identifier selected by the user.</summary>
     public ExportProfileId SelectedProfileId { get; private set; }
 
+    /// <summary>Whether to export individual frame images.</summary>
+    public bool ExportIndividualFrames => ExportFramesCheck?.IsChecked ?? false;
+
     public ExportDialog(
         System.Collections.Generic.IEnumerable<ExportProfile> profiles,
         string characterName,

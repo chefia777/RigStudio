@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SpriteRigStudio.Desktop.Dialogs.PivotEditorDialog"
+        Title="Edit Pivot" Width="350" Height="200"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="16" Spacing="8">
+    <TextBlock Text="Edit Pivot Point" FontWeight="Bold" />
+    <Grid ColumnDefinitions="80,*" RowDefinitions="Auto,Auto">
+      <TextBlock Text="X" VerticalAlignment="Center" />
+      <TextBox x:Name="PivotXBox" Text="0" Grid.Column="1" />
+      <TextBlock Text="Y" Grid.Row="1" VerticalAlignment="Center" />
+      <TextBox x:Name="PivotYBox" Text="0" Grid.Row="1" Grid.Column="1" />
+    </Grid>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+      <Button Content="Cancel" Click="OnCancel" />
+      <Button Content="OK" Click="OnOk" IsDefault="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>
