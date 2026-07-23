@@ -104,7 +104,7 @@ public class MainWindowViewModel : ReactiveObject
         // Initialize commands
         NewProjectCommand = ReactiveCommand.CreateFromTask(NewProjectAsync);
         OpenProjectCommand = ReactiveCommand.CreateFromTask(OpenProjectAsync);
-        SaveProjectCommand = ReactiveCommand.CreateFromTask(SaveProjectAsync, this.WhenAnyValue(x => x.IsDirty));
+        SaveProjectCommand = ReactiveCommand.CreateFromTask(SaveProjectAsync, this.WhenAnyValue(x => x.ActiveProject).Select(p => p != null));
         SaveProjectAsCommand = ReactiveCommand.CreateFromTask(SaveProjectAsAsync);
         UndoCommand = ReactiveCommand.Create(Undo, this.WhenAnyValue(x => x.CanUndo));
         RedoCommand = ReactiveCommand.Create(Redo, this.WhenAnyValue(x => x.CanRedo));
@@ -114,6 +114,19 @@ public class MainWindowViewModel : ReactiveObject
         ExportAllCommand = ReactiveCommand.CreateFromTask(ExportAllAsync);
         SwitchWorkspaceCommand = ReactiveCommand.Create<string>(SwitchWorkspace);
         SetActiveToolCommand = ReactiveCommand.Create<string>(SetActiveTool);
+
+        // React to project panel selection changes
+        _projectPanel.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(ProjectPanelViewModel.SelectedSkeleton))
+                OnSelectedSkeletonChanged();
+            else if (e.PropertyName == nameof(ProjectPanelViewModel.SelectedCharacter))
+                OnSelectedCharacterChanged();
+            else if (e.PropertyName == nameof(ProjectPanelViewModel.SelectedAnimation))
+                OnSelectedAnimationChanged();
+            else if (e.PropertyName == nameof(ProjectPanelViewModel.SelectedProfile))
+                OnSelectedProfileChanged();
+        };
 
         // Load default skeleton pose so viewport shows something at startup
         var defaultSkeleton = DefaultHumanoidSkeleton.Create();
@@ -125,6 +138,70 @@ public class MainWindowViewModel : ReactiveObject
             GroundAnchor = defaultSkeleton.DefaultGroundAnchor
         };
         CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(defaultSkeleton, defaultRig);
+    }
+
+    private void OnSelectedSkeletonChanged()
+    {
+        if (_activeProject == null) return;
+        var selected = _projectPanel.SelectedSkeleton;
+        if (selected == null) return;
+
+        if (_activeProject.Skeletons.TryGetValue(selected.Id.ToKeyString(), out var skeleton))
+        {
+            ActiveSkeleton = skeleton;
+            var rig = new CharacterRigDefinition
+            {
+                Name = skeleton.Name,
+                SkeletonId = skeleton.SkeletonId,
+                SetupTransform = new CharacterSetupTransform(),
+                GroundAnchor = skeleton.DefaultGroundAnchor
+            };
+            CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(skeleton, rig);
+            StatusMessage = $"Selected skeleton: {skeleton.Name}";
+        }
+    }
+
+    private void OnSelectedCharacterChanged()
+    {
+        if (_activeProject == null) return;
+        var selected = _projectPanel.SelectedCharacter;
+        if (selected == null) return;
+
+        if (_activeProject.CharacterRigs.TryGetValue(selected.Id.ToKeyString(), out var character))
+        {
+            ActiveCharacter = character;
+            if (_activeProject.Skeletons.TryGetValue(character.SkeletonId.ToKeyString(), out var skeleton))
+            {
+                CurrentPose = _rigPoseEvaluator.EvaluateSetupPose(skeleton, character);
+            }
+            StatusMessage = $"Selected character: {character.Name}";
+        }
+    }
+
+    private void OnSelectedAnimationChanged()
+    {
+        if (_activeProject == null) return;
+        var selected = _projectPanel.SelectedAnimation;
+        if (selected == null) return;
+
+        if (_activeProject.Animations.TryGetValue(selected.Id.ToKeyString(), out var animation))
+        {
+            ActiveAnimation = animation;
+            StatusMessage = $"Selected animation: {animation.Name}";
+        }
+    }
+
+    private void OnSelectedProfileChanged()
+    {
+        if (_activeProject == null) return;
+        var selected = _projectPanel.SelectedProfile;
+        if (selected == null) return;
+
+        if (_activeProject.ExportProfiles.TryGetValue(selected.Id.ToKeyString(), out var profile))
+        {
+            ActiveProfile = profile;
+            StatusMessage = $"Selected profile: {profile.Name}";
+        }
     }
 
     // --- Active workspace ---
@@ -279,7 +356,7 @@ public class MainWindowViewModel : ReactiveObject
                 return;
             }
 
-var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Project Directory",  AllowMultiple = false });
+            var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Project Directory", AllowMultiple = false });
             var selectedPath = folders?.FirstOrDefault()?.Path?.LocalPath;
             if (string.IsNullOrEmpty(selectedPath))
                 return;
@@ -382,7 +459,7 @@ var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPick
                 return;
             }
 
-var folders = await  window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Save Directory",  AllowMultiple = false });
+            var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Save Directory", AllowMultiple = false });
             var selectedPath = folders?.FirstOrDefault()?.Path?.LocalPath;
             if (string.IsNullOrEmpty(selectedPath))
                 return;
