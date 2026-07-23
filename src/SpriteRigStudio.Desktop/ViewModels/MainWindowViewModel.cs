@@ -74,6 +74,9 @@ public class MainWindowViewModel : ReactiveObject
     private double _currentTime;
     private bool _isPlaying;
     private bool _isCorrectionMode;
+    private bool _showSkeleton = true;
+    private bool _showArtwork = true;
+    private bool _showGuides = true;
     private IDisposable? _playbackSubscription;
     private IDisposable? _autosaveSubscription;
     private readonly Stack<(string description, Action undo, Action redo)> _undoStack = new();
@@ -83,6 +86,7 @@ public class MainWindowViewModel : ReactiveObject
     private string _exportStatus = "";
     private bool _isExporting;
     private CancellationTokenSource? _exportCancellation;
+    private readonly Dictionary<CharacterRigId, string> _pendingArtworkSources = new();
 
     // --- Panel view models ---
 
@@ -412,6 +416,24 @@ public class MainWindowViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isCorrectionMode, value);
     }
 
+    public bool ShowSkeleton
+    {
+        get => _showSkeleton;
+        private set => this.RaiseAndSetIfChanged(ref _showSkeleton, value);
+    }
+
+    public bool ShowArtwork
+    {
+        get => _showArtwork;
+        private set => this.RaiseAndSetIfChanged(ref _showArtwork, value);
+    }
+
+    public bool ShowGuides
+    {
+        get => _showGuides;
+        private set => this.RaiseAndSetIfChanged(ref _showGuides, value);
+    }
+
     // --- Export state ---
 
     public double ExportProgress
@@ -517,6 +539,7 @@ public class MainWindowViewModel : ReactiveObject
     {
         try
         {
+            _pendingArtworkSources.Clear();
             // Create a new in-memory project immediately — no folder picker needed.
             // User can save later via Save/SaveAs which will prompt for a directory.
             var project = new SpriteRigProject
@@ -573,6 +596,7 @@ public class MainWindowViewModel : ReactiveObject
             var result = await _projectService.OpenProjectAsync(path);
             if (result.IsSuccess && result.Project != null)
             {
+                _pendingArtworkSources.Clear();
                 ActiveProject = result.Project;
                 IsDirty = false;
                 StatusMessage = $"Opened project: {result.Project.Name}";
@@ -597,6 +621,13 @@ public class MainWindowViewModel : ReactiveObject
 
         try
         {
+            if (string.IsNullOrEmpty(_activeProject.ProjectDirectory))
+            {
+                StatusMessage = "Project has not been saved yet. Use Save As.";
+                return;
+            }
+
+            PrepareProjectAssetsForSave(_activeProject, _activeProject.ProjectDirectory);
             var result = await _projectService.SaveProjectAsync(_activeProject);
             if (result.IsSuccess)
             {
@@ -633,6 +664,7 @@ public class MainWindowViewModel : ReactiveObject
             if (string.IsNullOrEmpty(selectedPath))
                 return;
 
+            PrepareProjectAssetsForSave(_activeProject, selectedPath);
             var result = await _projectService.SaveProjectAsAsync(_activeProject, selectedPath);
             if (result.IsSuccess)
             {
@@ -938,8 +970,42 @@ public class MainWindowViewModel : ReactiveObject
 
     private async Task ExportAllAsync()
     {
-        // TODO: Export all animations for all characters
-        await Task.CompletedTask;
+        if (_activeProject == null || string.IsNullOrEmpty(_activeProject.ProjectDirectory))
+        {
+            StatusMessage = "Save the project before exporting.";
+            return;
+        }
+
+        var profile = _activeProfile ?? _activeProject.ExportProfiles.Values.FirstOrDefault();
+        if (profile == null)
+        {
+            StatusMessage = "Create an export profile first.";
+            return;
+        }
+
+        var jobs = from character in _activeProject.CharacterRigs.Values
+                   join animation in _activeProject.Animations.Values
+                       on character.SkeletonId equals animation.SkeletonId
+                   select (character, animation);
+        var jobList = jobs.ToList();
+        if (jobList.Count == 0)
+        {
+            StatusMessage = "No compatible character and animation pairs to export.";
+            return;
+        }
+
+        var exported = 0;
+        foreach (var (character, animation) in jobList)
+        {
+            ActiveCharacter = character;
+            ActiveAnimation = animation;
+            ActiveProfile = profile;
+            await ExportAnimationAsync();
+            if (ExportStatus == "Export complete.")
+                exported++;
+        }
+
+        StatusMessage = $"Exported {exported} of {jobList.Count} animation(s).";
     }
 
     private void SwitchWorkspace(string workspace)
@@ -1003,18 +1069,24 @@ public class MainWindowViewModel : ReactiveObject
 
     private void ToggleShowSkeleton()
     {
-        if (_activeCharacter != null) _activeCharacter.PreviewSettings.ShowSkeleton = !_activeCharacter.PreviewSettings.ShowSkeleton;
-        StatusMessage = _activeCharacter?.PreviewSettings.ShowSkeleton == true ? "Skeleton visible" : "Skeleton hidden";
+        ShowSkeleton = !ShowSkeleton;
+        if (_activeCharacter != null) _activeCharacter.PreviewSettings.ShowSkeleton = ShowSkeleton;
+        StatusMessage = ShowSkeleton ? "Skeleton visible" : "Skeleton hidden";
     }
 
-    private void ToggleShowArtwork() => StatusMessage = "Toggle artwork (coming soon).";
+    private void ToggleShowArtwork()
+    {
+        ShowArtwork = !ShowArtwork;
+        StatusMessage = ShowArtwork ? "Artwork visible" : "Artwork hidden";
+    }
 
     private void ToggleShowMasks() => StatusMessage = "Toggle masks (coming soon).";
 
     private void ToggleShowGuides()
     {
-        _sessionState.ShowGuides = !_sessionState.ShowGuides;
-        StatusMessage = _sessionState.ShowGuides ? "Guides visible" : "Guides hidden";
+        ShowGuides = !ShowGuides;
+        _sessionState.ShowGuides = ShowGuides;
+        StatusMessage = ShowGuides ? "Guides visible" : "Guides hidden";
     }
 
     private async Task AddAnimationEventAsync()
@@ -1036,6 +1108,7 @@ public class MainWindowViewModel : ReactiveObject
     private void SetActiveTool(string toolName)
     {
         ActiveTool = toolName;
+        SessionState.ActiveTool = toolName;
         StatusMessage = $"Tool: {toolName}";
     }
 
@@ -1064,27 +1137,27 @@ public class MainWindowViewModel : ReactiveObject
         string? artworkRef = null;
         if (!string.IsNullOrEmpty(artworkPath) && File.Exists(artworkPath))
         {
-            var sourcesDir = _activeProject.ProjectDirectory != null
-                ? System.IO.Path.Combine(_activeProject.ProjectDirectory, "Sources")
-                : System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SpriteRigStudio", "Unsaved", "Sources");
-            Directory.CreateDirectory(sourcesDir);
             var fileName = $"{name.ToLowerInvariant().Replace(' ', '_')}.png";
-            var destPath = System.IO.Path.Combine(sourcesDir, fileName);
-            File.Copy(artworkPath, destPath, overwrite: true);
-            artworkRef = System.IO.Path.Combine(sourcesDir, fileName);
+            if (_activeProject.ProjectDirectory != null)
+            {
+                var sourcesDir = System.IO.Path.Combine(_activeProject.ProjectDirectory, "Sources");
+                Directory.CreateDirectory(sourcesDir);
+                var destPath = System.IO.Path.Combine(sourcesDir, fileName);
+                File.Copy(artworkPath, destPath, overwrite: true);
+                artworkRef = $"Sources/{fileName}";
+            }
+            else
+            {
+                // Keep the source path temporarily; Save As will copy it into Sources/.
+                artworkRef = artworkPath;
+            }
         }
 
         var character = _rigService.CreateCharacterRig(name, skeletonId, artworkRef);
 
-        // Add a default part bound to root bone
-        if (artworkRef != null && _activeProject.Skeletons.TryGetValue(skeletonId.ToKeyString(), out var skeleton))
-        {
-            var rootBone = skeleton.GetRootBone();
-            if (rootBone != null)
-                _rigService.CreatePart(character, "body", rootBone.BoneId, Vector2D.Zero, SourceType.FlattenedImageMask, artworkRef);
-        }
-
         var charId = character.CharacterRigId;
+        if (!string.IsNullOrEmpty(artworkPath) && _activeProject.ProjectDirectory == null)
+            _pendingArtworkSources[charId] = artworkPath;
         ExecuteAction($"Create character '{name}'",
             undo: () => { _activeProject.CharacterRigs.Remove(charId.ToKeyString()); UpdateProjectPanel(); },
             redo: () => { _activeProject.CharacterRigs[charId.ToKeyString()] = character; UpdateProjectPanel(); });
@@ -1108,9 +1181,11 @@ public class MainWindowViewModel : ReactiveObject
         var window = _windowProvider.GetMainWindow();
         if (window == null) return;
 
-        var artworkPath = _activeCharacter.SourceArtwork != null
-            ? System.IO.Path.Combine(_activeProject.ProjectDirectory!, _activeCharacter.SourceArtwork)
-            : null;
+        var artworkPath = _activeCharacter.SourceArtwork;
+        if (!string.IsNullOrEmpty(artworkPath) && !Path.IsPathRooted(artworkPath))
+            artworkPath = _activeProject.ProjectDirectory != null
+                ? System.IO.Path.Combine(_activeProject.ProjectDirectory, artworkPath)
+                : null;
 
         if (artworkPath == null || !File.Exists(artworkPath))
         {
@@ -1125,10 +1200,32 @@ public class MainWindowViewModel : ReactiveObject
             var mask = _maskService.CreateMask(dialog.MaskName);
             foreach (var v in dialog.OuterContour)
                 _maskService.AddVertex(mask, v);
+            if (!_maskService.ValidateMask(mask).IsValid)
+            {
+                StatusMessage = "Mask is invalid. Check for self-intersections and try again.";
+                return;
+            }
+
+            if (!_activeProject.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var skeleton))
+                return;
+            var boneId = _sessionState.SelectedBoneIds.FirstOrDefault();
+            if (boneId == BoneId.Empty)
+                boneId = skeleton.RootBoneId;
+            var part = _rigService.CreatePartFromMask(
+                _activeCharacter, mask.Name, boneId, mask, _activeCharacter.SourceArtwork!);
             var maskId = mask.MaskId;
+            var partId = part.SpritePartId;
             ExecuteAction($"Create mask '{mask.Name}'",
-                undo: () => { _activeCharacter.Masks.Remove(maskId.ToString("N")); },
-                redo: () => { _activeCharacter.Masks[maskId.ToString("N")] = mask; });
+                undo: () =>
+                {
+                    _activeCharacter.Masks.Remove(maskId.ToString("N"));
+                    _activeCharacter.SpriteParts.Remove(partId.ToKeyString());
+                },
+                redo: () =>
+                {
+                    _activeCharacter.Masks[maskId.ToString("N")] = mask;
+                    _activeCharacter.SpriteParts[partId.ToKeyString()] = part;
+                });
             StatusMessage = $"Created mask '{mask.Name}' with {mask.VertexCount} vertices.";
         }
     }
@@ -1211,7 +1308,6 @@ public class MainWindowViewModel : ReactiveObject
         ExecuteAction($"Delete bone '{boneName}'",
             undo: () => { ActiveSkeleton.Bones[selectedId.ToKeyString()] = new BoneDefinition { BoneId = selectedId, Name = boneName, ParentBoneId = bone.ParentBoneId }; RefreshPose(); },
             redo: () => { _skeletonService.RemoveBone(ActiveSkeleton, selectedId); RefreshPose(); });
-        _skeletonService.RemoveBone(ActiveSkeleton, selectedId);
         StatusMessage = $"Deleted bone: {boneName}";
     }
 
@@ -1393,6 +1489,26 @@ public class MainWindowViewModel : ReactiveObject
         }
     }
 
+    /// <summary>Applies a new ground anchor selected in the viewport.</summary>
+    public async Task ApplyGroundAnchorAsync(Vector2D anchor)
+    {
+        if (_activeCharacter != null)
+        {
+            _rigService.SetGroundAnchor(_activeCharacter, anchor);
+            MarkDirty();
+            await RefreshPoseAsync();
+        }
+    }
+
+    /// <summary>Updates the editor selection after a viewport bone click.</summary>
+    public void SelectBone(BoneId? boneId)
+    {
+        _sessionState.SelectedBoneIds.Clear();
+        if (boneId is { } selected)
+            _sessionState.SelectedBoneIds.Add(selected);
+        SyncInspectorFromCharacter();
+    }
+
     /// <summary>
     /// Syncs the inspector panel values from the active character's setup transform
     /// and selected part properties.
@@ -1411,6 +1527,22 @@ public class MainWindowViewModel : ReactiveObject
                 _inspector.Rotation = t.RotationDegrees;
                 _inspector.ScaleX = t.UniformScale;
                 _inspector.ScaleY = t.UniformScale;
+
+                var selectedBoneId = _sessionState.SelectedBoneIds.FirstOrDefault();
+                if (selectedBoneId != BoneId.Empty &&
+                    _activeProject?.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var selectedSkeleton) == true &&
+                    selectedSkeleton.Bones.TryGetValue(selectedBoneId.ToKeyString(), out var selectedBone))
+                {
+                    _inspector.SelectedBoneName = selectedBone.Name;
+                    _inspector.BoneRole = selectedBone.Role.ToString();
+                    _inspector.BoneLength = selectedBone.ReferenceLength.ToString("F1");
+                }
+                else
+                {
+                    _inspector.SelectedBoneName = string.Empty;
+                    _inspector.BoneRole = string.Empty;
+                    _inspector.BoneLength = string.Empty;
+                }
 
                 // Sync selected part properties
                 var selectedPartId = _sessionState.SelectedPartIds.FirstOrDefault();
@@ -1501,6 +1633,82 @@ public class MainWindowViewModel : ReactiveObject
     {
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         return System.IO.Path.Combine(documents, "SpriteRigStudio", "Projects");
+    }
+
+    private void PrepareProjectAssetsForSave(SpriteRigProject project, string targetDirectory)
+    {
+        Directory.CreateDirectory(targetDirectory);
+        var pathMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var character in project.CharacterRigs.Values)
+        {
+            if (!string.IsNullOrWhiteSpace(character.SourceArtwork))
+            {
+                var source = character.SourceArtwork!;
+                if (_pendingArtworkSources.TryGetValue(character.CharacterRigId, out var pending))
+                    source = pending;
+
+                if (Path.IsPathRooted(source) && File.Exists(source))
+                {
+                    var relative = $"Sources/{SanitizeAssetName(Path.GetFileName(source))}";
+                    character.SourceArtwork = CopyAsset(source, relative, targetDirectory, pathMap, project);
+                }
+                else if (!Path.IsPathRooted(source))
+                {
+                    character.SourceArtwork = source.Replace('\\', '/');
+                }
+            }
+
+            foreach (var part in character.SpriteParts.Values)
+            {
+                if (string.IsNullOrWhiteSpace(part.ImageReference))
+                    continue;
+
+                var source = part.ImageReference!;
+                if (Path.IsPathRooted(source) && File.Exists(source))
+                {
+                    var relative = $"Parts/{SanitizeAssetName(character.Name)}/{SanitizeAssetName(Path.GetFileName(source))}";
+                    part.ImageReference = CopyAsset(source, relative, targetDirectory, pathMap, project);
+                }
+                else if (!Path.IsPathRooted(source))
+                {
+                    part.ImageReference = source.Replace('\\', '/');
+                }
+            }
+        }
+    }
+
+    private static string CopyAsset(
+        string source,
+        string relativePath,
+        string targetDirectory,
+        Dictionary<string, string> pathMap,
+        SpriteRigProject project)
+    {
+        if (pathMap.TryGetValue(source, out var existingRelative))
+            return existingRelative;
+
+        var normalized = relativePath.Replace('\\', '/');
+        var destination = Path.Combine(targetDirectory, normalized.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.Copy(source, destination, overwrite: true);
+        var info = new FileInfo(source);
+        project.AssetReferences[normalized] = new AssetReference
+        {
+            RelativePath = normalized,
+            OriginalFileName = Path.GetFileName(source),
+            SizeBytes = info.Length,
+            Category = Path.GetExtension(source).TrimStart('.').ToLowerInvariant()
+        };
+        pathMap[source] = normalized;
+        return normalized;
+    }
+
+    private static string SanitizeAssetName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
+        return sanitized.Trim().ToLowerInvariant().Replace(' ', '_');
     }
 
 }

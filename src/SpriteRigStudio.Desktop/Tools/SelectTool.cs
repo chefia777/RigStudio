@@ -52,6 +52,9 @@ public class SelectTool : ITool
         if (_isDragging)
         {
             _isDragging = false;
+            var distance = _dragEnd - _dragStart;
+            if (distance.X * distance.X + distance.Y * distance.Y <= 36)
+                viewport.SelectAt(_dragEnd);
             viewport.ShowSelectionRect = false;
             e.Handled = true;
         }

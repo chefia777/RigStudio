@@ -1,0 +1,9 @@
+{
+  "animationId": "66666666666666666666666666666666",
+  "name": "Idle",
+  "skeletonId": "22222222222222222222222222222222",
+  "framesPerSecond": 12,
+  "durationSeconds": 1,
+  "loopMode": 0,
+  "boneTracks": {}
+}

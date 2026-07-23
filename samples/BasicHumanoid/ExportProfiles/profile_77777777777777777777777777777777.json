@@ -1,0 +1,18 @@
+{
+  "exportProfileId": "77777777777777777777777777777777",
+  "name": "4x4 64",
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "columns": 4,
+  "rows": 4,
+  "frameRate": 12,
+  "backgroundMode": 0,
+  "backgroundColor": { "red": 255, "green": 255, "blue": 255, "alpha": 255 },
+  "samplingMode": 0,
+  "positionSnappingMode": 1,
+  "anchorPixel": { "x": 32, "y": 56 },
+  "scalingMode": 1,
+  "overflowPolicy": 0,
+  "includeSpritesheet": true,
+  "includeMetadata": true
+}

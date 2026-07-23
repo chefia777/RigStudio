@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia.Controls;
 using SpriteRigStudio.Desktop.ViewModels;
 
@@ -35,6 +36,17 @@ public partial class MainWindow : Window
                 await vm.ApplyBoneOverrideAsync(boneId, override_);
             };
 
+            Viewport.OnApplyGroundAnchor = async anchor =>
+            {
+                await vm.ApplyGroundAnchorAsync(anchor);
+            };
+
+            Viewport.OnBoneSelected = boneId =>
+            {
+                vm.SelectBone(boneId);
+                SyncViewportFromViewModel(vm);
+            };
+
             // ── Sync viewport state when active character changes ──
             vm.PropertyChanged += (s, args) =>
             {
@@ -42,6 +54,13 @@ public partial class MainWindow : Window
                 {
                     SyncViewportFromViewModel(vm);
                     LoadArtworkForViewport(vm);
+                }
+                else if (args.PropertyName == nameof(MainWindowViewModel.ActiveTool) ||
+                         args.PropertyName == nameof(MainWindowViewModel.ShowSkeleton) ||
+                         args.PropertyName == nameof(MainWindowViewModel.ShowArtwork) ||
+                         args.PropertyName == nameof(MainWindowViewModel.ShowGuides))
+                {
+                    SyncViewportFromViewModel(vm);
                 }
             };
 
@@ -60,11 +79,29 @@ public partial class MainWindow : Window
         if (vm.ActiveCharacter != null)
         {
             Viewport.CurrentSetupTransform = vm.ActiveCharacter.SetupTransform;
+            Viewport.SelectedBoneId = vm.SessionState.SelectedBoneIds.FirstOrDefault();
+            if (Viewport.SelectedBoneId is { } selectedBoneId &&
+                vm.ActiveCharacter.BoneSetupOverrides.TryGetValue(selectedBoneId.ToKeyString(), out var boneOverride))
+            {
+                Viewport.CurrentBoneOverridePosition = boneOverride.LocalPosition;
+                Viewport.CurrentBoneOverrideRotation = boneOverride.LocalRotationDegrees;
+            }
+            else
+            {
+                Viewport.CurrentBoneOverridePosition = null;
+                Viewport.CurrentBoneOverrideRotation = null;
+            }
+            Viewport.ShowSkeleton = vm.ShowSkeleton;
         }
         else
         {
             Viewport.CurrentSetupTransform = null;
+            Viewport.SelectedBoneId = null;
         }
+
+        Viewport.ShowArtwork = vm.ShowArtwork;
+        Viewport.ShowGuides = vm.ShowGuides;
+        Viewport.SetActiveTool(vm.ActiveTool);
     }
 
     /// <summary>
@@ -75,9 +112,13 @@ public partial class MainWindow : Window
         var character = vm.ActiveCharacter;
         var project = vm.ActiveProject;
 
-        if (character?.SourceArtwork != null && project?.ProjectDirectory != null)
+        if (character?.SourceArtwork != null)
         {
-            var path = System.IO.Path.Combine(project.ProjectDirectory, character.SourceArtwork);
+            var path = System.IO.Path.IsPathRooted(character.SourceArtwork)
+                ? character.SourceArtwork
+                : project?.ProjectDirectory != null
+                    ? System.IO.Path.Combine(project.ProjectDirectory, character.SourceArtwork)
+                    : null;
             Viewport.LoadArtwork(path);
         }
         else

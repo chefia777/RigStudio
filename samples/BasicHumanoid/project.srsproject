@@ -1,160 +1,19 @@
 {
-  "$schema": "../srsproject.schema.json",
-  "formatVersion": "1.0",
-  "id": "basic-humanoid-v1",
+  "formatVersion": 1,
+  "projectId": "11111111111111111111111111111111",
   "name": "Basic Humanoid",
-  "author": "Sprite Rig Studio",
-  "description": "A simple stick figure humanoid for rigging and animation tests.",
-  "created": "2026-07-23T00:00:00Z",
-  "modified": "2026-07-23T00:00:00Z",
-  "version": "1.0.0",
-
-  "textures": [
+  "createdAtUtc": "2026-07-23T00:00:00Z",
+  "updatedAtUtc": "2026-07-23T00:00:00Z",
+  "skeletonFiles": ["Skeletons/skeleton_22222222222222222222222222222222.json"],
+  "characterFiles": ["Characters/character_44444444444444444444444444444444.json"],
+  "animationFiles": ["Animations/animation_66666666666666666666666666666666.json"],
+  "exportProfileFiles": ["ExportProfiles/profile_77777777777777777777777777777777.json"],
+  "assets": [
     {
-      "id": "character-main",
-      "path": "character.png",
-      "width": 64,
-      "height": 64,
-      "filterMode": "Point"
-    }
-  ],
-
-  "skeleton": {
-    "bones": [
-      {
-        "id": "root",
-        "name": "Root",
-        "parentId": null,
-        "position": { "x": 32, "y": 0 },
-        "length": 0,
-        "rotation": 0
-      },
-      {
-        "id": "hips",
-        "name": "Hips",
-        "parentId": "root",
-        "position": { "x": 32, "y": 40 },
-        "length": 0,
-        "rotation": 0
-      },
-      {
-        "id": "spine",
-        "name": "Spine",
-        "parentId": "hips",
-        "position": { "x": 32, "y": 20 },
-        "length": 20,
-        "rotation": 0
-      },
-      {
-        "id": "head",
-        "name": "Head",
-        "parentId": "spine",
-        "position": { "x": 32, "y": 12 },
-        "length": 0,
-        "rotation": 0
-      },
-      {
-        "id": "left-upper-arm",
-        "name": "Left Upper Arm",
-        "parentId": "spine",
-        "position": { "x": 32, "y": 28 },
-        "length": 12,
-        "rotation": -45
-      },
-      {
-        "id": "right-upper-arm",
-        "name": "Right Upper Arm",
-        "parentId": "spine",
-        "position": { "x": 32, "y": 28 },
-        "length": 12,
-        "rotation": 45
-      },
-      {
-        "id": "left-forearm",
-        "name": "Left Forearm",
-        "parentId": "left-upper-arm",
-        "position": { "x": 20, "y": 20 },
-        "length": 12,
-        "rotation": -30
-      },
-      {
-        "id": "right-forearm",
-        "name": "Right Forearm",
-        "parentId": "right-upper-arm",
-        "position": { "x": 44, "y": 20 },
-        "length": 12,
-        "rotation": 30
-      },
-      {
-        "id": "left-thigh",
-        "name": "Left Thigh",
-        "parentId": "hips",
-        "position": { "x": 32, "y": 40 },
-        "length": 16,
-        "rotation": -20
-      },
-      {
-        "id": "right-thigh",
-        "name": "Right Thigh",
-        "parentId": "hips",
-        "position": { "x": 32, "y": 40 },
-        "length": 16,
-        "rotation": 20
-      },
-      {
-        "id": "left-shin",
-        "name": "Left Shin",
-        "parentId": "left-thigh",
-        "position": { "x": 22, "y": 56 },
-        "length": 16,
-        "rotation": 0
-      },
-      {
-        "id": "right-shin",
-        "name": "Right Shin",
-        "parentId": "right-thigh",
-        "position": { "x": 42, "y": 56 },
-        "length": 16,
-        "rotation": 0
-      }
-    ]
-  },
-
-  "slots": [
-    {
-      "id": "body-slot",
-      "name": "Body",
-      "boneId": "spine",
-      "textureId": "character-main",
-      "sourceRect": { "x": 0, "y": 0, "width": 64, "height": 64 },
-      "pivot": { "x": 32, "y": 32 }
-    }
-  ],
-
-  "animations": [
-    {
-      "id": "idle",
-      "name": "Idle",
-      "duration": 1.0,
-      "loop": true,
-      "tracks": [
-        {
-          "boneId": "left-upper-arm",
-          "keyframes": [
-            { "time": 0.0, "rotation": -40 },
-            { "time": 0.5, "rotation": -50 },
-            { "time": 1.0, "rotation": -40 }
-          ]
-        },
-        {
-          "boneId": "right-upper-arm",
-          "keyframes": [
-            { "time": 0.0, "rotation": 40 },
-            { "time": 0.5, "rotation": 50 },
-            { "time": 1.0, "rotation": 40 }
-          ]
-        }
-      ]
+      "relativePath": "character.png",
+      "originalFileName": "character.png",
+      "sizeBytes": 439,
+      "category": "png"
     }
   ]
 }

@@ -6,6 +6,7 @@ param(
 
 $outputDir = "$PSScriptRoot\..\artifacts\publish\windows-x64"
 $archiveName = "SpriteRigStudio-win-x64-$Version.zip"
+$archivePath = Join-Path (Split-Path $outputDir -Parent) $archiveName
 
 Write-Host "Publishing Sprite Rig Studio $Version ($Configuration, $Runtime)..." -ForegroundColor Cyan
 
@@ -14,6 +15,8 @@ dotnet publish "$PSScriptRoot\..\src\SpriteRigStudio.Desktop\SpriteRigStudio.Des
     -c $Configuration `
     -r $Runtime `
     --self-contained true `
+    -m:1 `
+    -p:NuGetAudit=false `
     -p:Version=$Version `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
@@ -29,6 +32,8 @@ dotnet publish "$PSScriptRoot\..\src\SpriteRigStudio.Cli\SpriteRigStudio.Cli.csp
     -c $Configuration `
     -r $Runtime `
     --self-contained true `
+    -m:1 `
+    -p:NuGetAudit=false `
     -p:Version=$Version `
     -p:PublishSingleFile=true `
     -o "$outputDir"
@@ -40,3 +45,9 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Publishing succeeded." -ForegroundColor Green
 Write-Host "Output: $outputDir"
+
+if (Test-Path $archivePath) {
+    Remove-Item -LiteralPath $archivePath -Force
+}
+Compress-Archive -Path (Join-Path $outputDir '*') -DestinationPath $archivePath -CompressionLevel Optimal
+Write-Host "Archive: $archivePath"

@@ -39,16 +39,7 @@ public class ProjectRepository : IProjectRepository
     {
         try
         {
-            _fileSystem.CreateDirectory(projectDirectory);
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.SourcesDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.PartsDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.SkeletonsDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.CharactersDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.AnimationsDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.ExportProfilesDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.ThumbnailsDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.RecoveryDir));
-            _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.ExportsDir));
+            CreateProjectDirectories(projectDirectory);
 
             // Save initial manifest
             var manifest = new ProjectManifest
@@ -102,6 +93,8 @@ public class ProjectRepository : IProjectRepository
                 UpdatedAtUtc = manifest.UpdatedAtUtc,
                 ProjectDirectory = projectDirectory
             };
+            foreach (var asset in manifest.Assets)
+                project.AssetReferences[asset.RelativePath] = asset;
 
             // Skeletons
             foreach (var skeletonFile in manifest.SkeletonFiles)
@@ -175,7 +168,7 @@ public class ProjectRepository : IProjectRepository
 
     public async Task<SaveProjectResult> SaveAsAsync(SpriteRigProject project, string newDirectory)
     {
-        _fileSystem.CreateDirectory(newDirectory);
+        CreateProjectDirectories(newDirectory);
         return await SaveToDirectoryAsync(project, newDirectory);
     }
 
@@ -193,6 +186,7 @@ public class ProjectRepository : IProjectRepository
                 CreatedAtUtc = project.CreatedAtUtc,
                 UpdatedAtUtc = project.UpdatedAtUtc
             };
+            manifest.Assets.AddRange(project.AssetReferences.Values);
 
             // Save skeletons
             foreach (var (skeletonId, skeleton) in project.Skeletons)
@@ -273,7 +267,7 @@ public class ProjectRepository : IProjectRepository
 
             var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
             var autosaveDir = _fileSystem.CombinePath(recoveryDir, $"autosave_{timestamp}");
-            _fileSystem.CreateDirectory(autosaveDir);
+            CreateProjectDirectories(autosaveDir);
 
             // Save project data to autosave directory
             var saveResult = await SaveToDirectoryAsync(project, autosaveDir);
@@ -306,5 +300,19 @@ public class ProjectRepository : IProjectRepository
     {
         // Simplified
         return Task.CompletedTask;
+    }
+
+    private void CreateProjectDirectories(string projectDirectory)
+    {
+        _fileSystem.CreateDirectory(projectDirectory);
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.SourcesDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.PartsDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.SkeletonsDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.CharactersDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.AnimationsDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.ExportProfilesDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.ThumbnailsDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.RecoveryDir));
+        _fileSystem.CreateDirectory(_fileSystem.CombinePath(projectDirectory, ProjectFileNaming.ExportsDir));
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -50,6 +51,12 @@ public class ViewportControl : Control
     /// </summary>
     public Func<BoneId, BoneSetupOverride, Task>? OnApplyBoneOverride { get; set; }
 
+    /// <summary>Raised when the user selects a bone in the viewport.</summary>
+    public Action<BoneId?>? OnBoneSelected { get; set; }
+
+    /// <summary>Raised when the anchor tool commits a new ground anchor.</summary>
+    public Func<Vector2D, Task>? OnApplyGroundAnchor { get; set; }
+
     // ── Tool-accessible state set by MainWindow code-behind ────────────
 
     /// <summary>The active character's current setup transform (read by move/rotate/scale tools).</summary>
@@ -71,6 +78,7 @@ public class ViewportControl : Control
     private double _activeRotation;
     private double _activeScale = 1.0;
     private double _activeBoneRotation;
+    private bool _showSelectionRect;
 
     /// <summary>Screen-space X offset for visual drag feedback.</summary>
     public double DragOffsetX
@@ -88,7 +96,11 @@ public class ViewportControl : Control
 
     public Point SelectionStart { get; set; }
     public Point SelectionEnd { get; set; }
-    public bool ShowSelectionRect { get; set; }
+    public bool ShowSelectionRect
+    {
+        get => _showSelectionRect;
+        set { _showSelectionRect = value; InvalidateVisual(); }
+    }
 
     /// <summary>Visual rotation angle in degrees applied during a rotate drag.</summary>
     public double ActiveRotation
@@ -116,6 +128,7 @@ public class ViewportControl : Control
     public double PanY { get => _panY; set { _panY = value; InvalidateVisual(); } }
     public bool ShowGuides { get => _showGuides; set { _showGuides = value; InvalidateVisual(); } }
     public bool ShowSkeleton { get => _showSkeleton; set { _showSkeleton = value; InvalidateVisual(); } }
+    public bool ShowArtwork { get; set; } = true;
     public EvaluatedPose? EvaluatedPose { get => _evaluatedPose; set { _evaluatedPose = value; InvalidateVisual(); } }
     public string ActiveTool { get => _activeTool; set => _activeTool = value; }
 
@@ -138,8 +151,53 @@ public class ViewportControl : Control
         InvalidateVisual();
     }
 
-    /// <summary>Gets the screen position of the currently selected joint (simplified placeholder).</summary>
-    public Point? GetSelectedJointScreenPosition() => null;
+    /// <summary>Gets the screen position of the currently selected joint.</summary>
+    public Point? GetSelectedJointScreenPosition()
+    {
+        if (_evaluatedPose == null || SelectedBoneId is not { } selectedBoneId ||
+            !_evaluatedPose.BoneWorldTransforms.TryGetValue(selectedBoneId, out var transform))
+            return null;
+
+        return WorldToScreen(new Point(transform.M31, transform.M32));
+    }
+
+    /// <summary>Changes the active tool and updates the viewport cursor.</summary>
+    public void SetActiveTool(string toolName)
+    {
+        _toolManager.SetActiveTool(toolName);
+        ActiveTool = toolName;
+        Cursor = _toolManager.ActiveCursor;
+        InvalidateVisual();
+    }
+
+    /// <summary>Selects the nearest visible bone joint under the pointer.</summary>
+    public void SelectAt(Point screenPoint)
+    {
+        if (_evaluatedPose == null || _evaluatedPose.BoneWorldTransforms.Count == 0)
+        {
+            SelectedBoneId = null;
+            OnBoneSelected?.Invoke(null);
+            return;
+        }
+
+        var closest = _evaluatedPose.BoneWorldTransforms
+            .Select(pair =>
+            {
+                var screen = WorldToScreen(new Point(pair.Value.M31, pair.Value.M32));
+                var dx = screen.X - screenPoint.X;
+                var dy = screen.Y - screenPoint.Y;
+                return (pair.Key, DistanceSquared: dx * dx + dy * dy);
+            })
+            .OrderBy(candidate => candidate.DistanceSquared)
+            .First();
+
+        const double selectionRadius = 18.0;
+        SelectedBoneId = closest.DistanceSquared <= selectionRadius * selectionRadius
+            ? closest.Key
+            : null;
+        OnBoneSelected?.Invoke(SelectedBoneId);
+        InvalidateVisual();
+    }
 
     /// <summary>Commits a joint movement as a single undoable action.</summary>
     public void CommitJointMovement()
@@ -192,6 +250,15 @@ public class ViewportControl : Control
     public ViewportControl()
     {
         _toolManager = new ToolManager();
+        _toolManager.RegisterTool(new SelectTool());
+        _toolManager.RegisterTool(new MoveRigTool());
+        _toolManager.RegisterTool(new RotateRigTool());
+        _toolManager.RegisterTool(new ScaleRigTool());
+        _toolManager.RegisterTool(new MoveJointTool());
+        _toolManager.RegisterTool(new RotateBoneTool());
+        _toolManager.RegisterTool(new AnchorTool());
+        _toolManager.RegisterTool(new PanTool());
+        _toolManager.SetActiveTool("Select");
         Focusable = true;
         ClipToBounds = true;
         HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
@@ -321,6 +388,16 @@ public class ViewportControl : Control
 
                 // Draw skeleton
                 if (_showSkeleton) DrawSkeleton(context);
+
+                if (ShowSelectionRect)
+                {
+                    var left = Math.Min(SelectionStart.X, SelectionEnd.X);
+                    var top = Math.Min(SelectionStart.Y, SelectionEnd.Y);
+                    var rect = new Rect(
+                        ScreenToWorld(new Point(left, top)),
+                        ScreenToWorld(new Point(Math.Max(left, SelectionEnd.X), Math.Max(top, SelectionEnd.Y))));
+                    context.DrawRectangle(null, new Pen(Brushes.LightBlue, 1.0 / _zoom), rect);
+                }
             }
         }
         catch
@@ -353,7 +430,8 @@ public class ViewportControl : Control
             var y = kvp.Value.M32;
 
             // Draw joint
-            context.DrawEllipse(Brushes.Yellow, null, new Point(x, y), jointSize, jointSize);
+            var brush = SelectedBoneId == kvp.Key ? Brushes.Orange : Brushes.Yellow;
+            context.DrawEllipse(brush, null, new Point(x, y), jointSize, jointSize);
 
             // Draw bone line to parent
             if (_evaluatedPose.BoneLocalTransforms.TryGetValue(kvp.Key, out var local))
@@ -367,7 +445,7 @@ public class ViewportControl : Control
 
     private void DrawArtwork(DrawingContext context)
     {
-        if (_artworkBitmap == null) return;
+        if (!ShowArtwork || _artworkBitmap == null) return;
 
         var srcRect = new Rect(0, 0, _artworkBitmap.Size.Width, _artworkBitmap.Size.Height);
         var halfW = _artworkBitmap.Size.Width / 2.0;

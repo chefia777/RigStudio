@@ -1,0 +1,34 @@
+{
+  "characterRigId": "44444444444444444444444444444444",
+  "name": "Basic Humanoid",
+  "skeletonId": "22222222222222222222222222222222",
+  "sourceArtwork": "character.png",
+  "setupTransform": {
+    "position": { "x": 0, "y": 0 },
+    "rotationDegrees": 0,
+    "uniformScale": 1,
+    "flipHorizontal": false,
+    "locked": false,
+    "snapToPixels": true
+  },
+  "groundAnchor": { "x": 32, "y": 0 },
+  "spriteParts": {
+    "55555555555555555555555555555555": {
+      "spritePartId": "55555555555555555555555555555555",
+      "name": "Body",
+      "sourceType": 1,
+      "imageReference": "character.png",
+      "pivot": { "x": 32, "y": 56 },
+      "boundBoneId": "33333333333333333333333333333333",
+      "localSetupTransform": {
+        "position": { "x": 0, "y": 0 },
+        "rotationDegrees": 0,
+        "scale": { "x": 1, "y": 1 }
+      },
+      "renderOrder": 0,
+      "visibility": true,
+      "opacity": 1,
+      "isRigid": true
+    }
+  }
+}

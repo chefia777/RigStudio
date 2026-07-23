@@ -1,0 +1,22 @@
+{
+  "skeletonId": "22222222222222222222222222222222",
+  "name": "Basic Humanoid",
+  "rootBoneId": "33333333333333333333333333333333",
+  "bones": {
+    "33333333333333333333333333333333": {
+      "boneId": "33333333333333333333333333333333",
+      "name": "Root",
+      "role": 1,
+      "parentBoneId": null,
+      "restLocalTransform": {
+        "position": { "x": 32, "y": 8 },
+        "rotationDegrees": 0,
+        "scale": { "x": 1, "y": 1 }
+      },
+      "referenceLength": 32,
+      "defaultRenderOrderHint": 0
+    }
+  },
+  "referenceDimensions": { "width": 64, "height": 64 },
+  "defaultGroundAnchor": { "x": 32, "y": 0 }
+}
