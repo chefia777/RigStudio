@@ -1,13 +1,13 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Microsoft.Extensions.DependencyInjection;
 using SpriteRigStudio.Desktop.Composition;
 using SpriteRigStudio.Desktop.Views;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace SpriteRigStudio.Desktop;
 
-public partial class App : Application
+public partial class App : Avalonia.Application
 {
     public override void Initialize()
     {

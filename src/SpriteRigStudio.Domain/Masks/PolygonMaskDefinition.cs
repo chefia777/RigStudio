@@ -46,7 +46,10 @@ public class PolygonMaskDefinition
         return !HasSelfIntersections();
     }
 
-    private bool HasSelfIntersections()
+    /// <summary>
+    /// Returns true if the outer contour has self-intersecting edges.
+    /// </summary>
+    public bool HasSelfIntersections()
     {
         // Simple O(n^2) segment intersection check
         for (int i = 0; i < OuterContour.Count; i++)
