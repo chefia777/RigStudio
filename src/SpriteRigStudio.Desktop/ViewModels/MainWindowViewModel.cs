@@ -76,7 +76,11 @@ public class MainWindowViewModel : ReactiveObject
     private bool _isCorrectionMode;
     private bool _showSkeleton = true;
     private bool _showArtwork = true;
+    private bool _showMasks;
     private bool _showGuides = true;
+    private bool _isProjectPanelVisible = true;
+    private bool _isInspectorPanelVisible = true;
+    private bool _isTimelineVisible = true;
     private IDisposable? _playbackSubscription;
     private IDisposable? _autosaveSubscription;
     private readonly Stack<(string description, Action undo, Action redo)> _undoStack = new();
@@ -428,11 +432,38 @@ public class MainWindowViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _showArtwork, value);
     }
 
+    public bool ShowMasks
+    {
+        get => _showMasks;
+        private set => this.RaiseAndSetIfChanged(ref _showMasks, value);
+    }
+
     public bool ShowGuides
     {
         get => _showGuides;
         private set => this.RaiseAndSetIfChanged(ref _showGuides, value);
     }
+
+    public bool IsProjectPanelVisible
+    {
+        get => _isProjectPanelVisible;
+        private set => this.RaiseAndSetIfChanged(ref _isProjectPanelVisible, value);
+    }
+
+    public bool IsInspectorPanelVisible
+    {
+        get => _isInspectorPanelVisible;
+        private set => this.RaiseAndSetIfChanged(ref _isInspectorPanelVisible, value);
+    }
+
+    public bool IsTimelineVisible
+    {
+        get => _isTimelineVisible;
+        private set => this.RaiseAndSetIfChanged(ref _isTimelineVisible, value);
+    }
+
+    /// <summary>Raised by the Fit Viewport command so the window can reset the viewport camera.</summary>
+    public event Action? FitViewportRequested;
 
     // --- Export state ---
 
@@ -1022,7 +1053,11 @@ public class MainWindowViewModel : ReactiveObject
         ExportStatus = "Cancelling...";
     }
 
-    private void FitViewport() => StatusMessage = "Fit viewport.";
+    private void FitViewport()
+    {
+        FitViewportRequested?.Invoke();
+        StatusMessage = "Fit viewport.";
+    }
 
     private void ExitApp()
     {
@@ -1061,11 +1096,23 @@ public class MainWindowViewModel : ReactiveObject
         StatusMessage = $"Created export profile: {profile.Name}";
     }
 
-    private void ToggleProjectPanel() => StatusMessage = "Toggle project panel (coming soon).";
+    private void ToggleProjectPanel()
+    {
+        IsProjectPanelVisible = !IsProjectPanelVisible;
+        StatusMessage = IsProjectPanelVisible ? "Project panel visible" : "Project panel hidden";
+    }
 
-    private void ToggleInspectorPanel() => StatusMessage = "Toggle inspector panel (coming soon).";
+    private void ToggleInspectorPanel()
+    {
+        IsInspectorPanelVisible = !IsInspectorPanelVisible;
+        StatusMessage = IsInspectorPanelVisible ? "Inspector panel visible" : "Inspector panel hidden";
+    }
 
-    private void ToggleTimeline() => StatusMessage = "Toggle timeline (coming soon).";
+    private void ToggleTimeline()
+    {
+        IsTimelineVisible = !IsTimelineVisible;
+        StatusMessage = IsTimelineVisible ? "Timeline visible" : "Timeline hidden";
+    }
 
     private void ToggleShowSkeleton()
     {
@@ -1080,7 +1127,13 @@ public class MainWindowViewModel : ReactiveObject
         StatusMessage = ShowArtwork ? "Artwork visible" : "Artwork hidden";
     }
 
-    private void ToggleShowMasks() => StatusMessage = "Toggle masks (coming soon).";
+    private void ToggleShowMasks()
+    {
+        ShowMasks = !ShowMasks;
+        if (_activeCharacter != null)
+            _activeCharacter.PreviewSettings.ShowMasks = ShowMasks;
+        StatusMessage = ShowMasks ? "Masks visible" : "Masks hidden";
+    }
 
     private void ToggleShowGuides()
     {

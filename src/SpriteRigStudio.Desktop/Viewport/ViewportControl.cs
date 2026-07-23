@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using SpriteRigStudio.Desktop.Tools;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Geometry;
+using SpriteRigStudio.Domain.Masks;
 using SpriteRigStudio.Domain.Retargeting;
 using SpriteRigStudio.Domain.Rigs;
 
@@ -34,6 +35,7 @@ public class ViewportControl : Control
     private double _panY;
     private bool _showGuides = true;
     private bool _showSkeleton = true;
+    private bool _showMasks;
     private EvaluatedPose? _evaluatedPose;
     private string _activeTool = "Select";
 
@@ -128,7 +130,9 @@ public class ViewportControl : Control
     public double PanY { get => _panY; set { _panY = value; InvalidateVisual(); } }
     public bool ShowGuides { get => _showGuides; set { _showGuides = value; InvalidateVisual(); } }
     public bool ShowSkeleton { get => _showSkeleton; set { _showSkeleton = value; InvalidateVisual(); } }
+    public bool ShowMasks { get => _showMasks; set { _showMasks = value; InvalidateVisual(); } }
     public bool ShowArtwork { get; set; } = true;
+    public IReadOnlyCollection<PolygonMaskDefinition> Masks { get; set; } = Array.Empty<PolygonMaskDefinition>();
     public EvaluatedPose? EvaluatedPose { get => _evaluatedPose; set { _evaluatedPose = value; InvalidateVisual(); } }
     public string ActiveTool { get => _activeTool; set => _activeTool = value; }
 
@@ -149,6 +153,26 @@ public class ViewportControl : Control
             _artworkBitmap = new Bitmap(filePath);
 
         InvalidateVisual();
+    }
+
+    /// <summary>Resets the camera so the loaded artwork fits inside the viewport.</summary>
+    public void FitToContent()
+    {
+        if (Bounds.Width <= 0 || Bounds.Height <= 0) return;
+
+        var contentWidth = _artworkBitmap?.Size.Width ?? 400;
+        var contentHeight = _artworkBitmap?.Size.Height ?? 400;
+        if (_evaluatedPose != null && _artworkBitmap == null && _evaluatedPose.BoneWorldTransforms.Count > 0)
+        {
+            var xs = _evaluatedPose.BoneWorldTransforms.Values.Select(t => t.M31).ToArray();
+            var ys = _evaluatedPose.BoneWorldTransforms.Values.Select(t => t.M32).ToArray();
+            contentWidth = Math.Max(100, xs.Max() - xs.Min() + 100);
+            contentHeight = Math.Max(100, ys.Max() - ys.Min() + 100);
+        }
+
+        Zoom = Math.Clamp(Math.Min(Bounds.Width * 0.8 / contentWidth, Bounds.Height * 0.8 / contentHeight), 0.05, 20.0);
+        PanX = 0;
+        PanY = 0;
     }
 
     /// <summary>Gets the screen position of the currently selected joint.</summary>
@@ -383,6 +407,9 @@ public class ViewportControl : Control
                 // Draw artwork first (background layer)
                 DrawArtwork(context);
 
+                // Draw mask outlines over the source artwork
+                if (_showMasks) DrawMasks(context);
+
                 // Draw guides
                 if (_showGuides) DrawGuides(context);
 
@@ -415,6 +442,26 @@ public class ViewportControl : Control
 
         // Center line
         context.DrawLine(guidePen, new Point(0, -5000), new Point(0, 5000));
+    }
+
+    private void DrawMasks(DrawingContext context)
+    {
+        if (_artworkBitmap == null || Masks.Count == 0) return;
+
+        var halfW = _artworkBitmap.Size.Width / 2.0;
+        var halfH = _artworkBitmap.Size.Height / 2.0;
+        var pen = new Pen(Brushes.Cyan, 2.0 / _zoom);
+
+        foreach (var mask in Masks)
+        {
+            if (!mask.Enabled || !mask.Visible || mask.OuterContour.Count < 2) continue;
+
+            var points = mask.OuterContour
+                .Select(vertex => new Point(vertex.X - halfW, halfH - vertex.Y))
+                .ToArray();
+            for (var i = 0; i < points.Length; i++)
+                context.DrawLine(pen, points[i], points[(i + 1) % points.Length]);
+        }
     }
 
     private void DrawSkeleton(DrawingContext context)

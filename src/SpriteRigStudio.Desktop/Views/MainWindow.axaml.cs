@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia.Controls;
 using SpriteRigStudio.Desktop.ViewModels;
+using SpriteRigStudio.Domain.Masks;
 
 namespace SpriteRigStudio.Desktop.Views;
 
@@ -22,7 +23,12 @@ public partial class MainWindow : Window
             {
                 if (args.PropertyName == nameof(MainWindowViewModel.CurrentPose))
                     Viewport.EvaluatedPose = vm.CurrentPose;
+                else if (args.PropertyName == nameof(MainWindowViewModel.IsProjectPanelVisible) ||
+                         args.PropertyName == nameof(MainWindowViewModel.IsInspectorPanelVisible) ||
+                         args.PropertyName == nameof(MainWindowViewModel.IsTimelineVisible))
+                    ApplyPanelLayout(vm);
             };
+            vm.FitViewportRequested += Viewport.FitToContent;
             Viewport.EvaluatedPose = vm.CurrentPose;
 
             // ── Tool callbacks ─────────────────────────────────────
@@ -58,6 +64,7 @@ public partial class MainWindow : Window
                 else if (args.PropertyName == nameof(MainWindowViewModel.ActiveTool) ||
                          args.PropertyName == nameof(MainWindowViewModel.ShowSkeleton) ||
                          args.PropertyName == nameof(MainWindowViewModel.ShowArtwork) ||
+                         args.PropertyName == nameof(MainWindowViewModel.ShowMasks) ||
                          args.PropertyName == nameof(MainWindowViewModel.ShowGuides))
                 {
                     SyncViewportFromViewModel(vm);
@@ -66,6 +73,7 @@ public partial class MainWindow : Window
 
             // Initial sync
             SyncViewportFromViewModel(vm);
+            ApplyPanelLayout(vm);
             LoadArtworkForViewport(vm);
         }
     }
@@ -92,16 +100,27 @@ public partial class MainWindow : Window
                 Viewport.CurrentBoneOverrideRotation = null;
             }
             Viewport.ShowSkeleton = vm.ShowSkeleton;
+            Viewport.ShowMasks = vm.ShowMasks;
+            Viewport.Masks = vm.ActiveCharacter.Masks.Values.ToArray();
         }
         else
         {
             Viewport.CurrentSetupTransform = null;
             Viewport.SelectedBoneId = null;
+            Viewport.ShowMasks = vm.ShowMasks;
+            Viewport.Masks = Array.Empty<PolygonMaskDefinition>();
         }
 
         Viewport.ShowArtwork = vm.ShowArtwork;
         Viewport.ShowGuides = vm.ShowGuides;
         Viewport.SetActiveTool(vm.ActiveTool);
+    }
+
+    private void ApplyPanelLayout(MainWindowViewModel vm)
+    {
+        MainContentGrid.ColumnDefinitions[0].Width = vm.IsProjectPanelVisible ? new GridLength(250) : new GridLength(0);
+        MainContentGrid.ColumnDefinitions[2].Width = vm.IsInspectorPanelVisible ? new GridLength(280) : new GridLength(0);
+        MainContentGrid.RowDefinitions[1].Height = vm.IsTimelineVisible ? new GridLength(80) : new GridLength(0);
     }
 
     /// <summary>

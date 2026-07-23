@@ -47,14 +47,14 @@
         <MenuItem Header="Prefere_nces..." Command="{Binding PreferencesCommand}" />
       </MenuItem>
       <MenuItem Header="_View">
-        <MenuItem Header="_Project Panel" IsChecked="True" />
-        <MenuItem Header="_Inspector Panel" IsChecked="True" />
-        <MenuItem Header="_Timeline" IsChecked="True" />
+        <MenuItem Header="_Project Panel" IsChecked="{Binding IsProjectPanelVisible}" Command="{Binding ToggleProjectPanelCommand}" />
+        <MenuItem Header="_Inspector Panel" IsChecked="{Binding IsInspectorPanelVisible}" Command="{Binding ToggleInspectorPanelCommand}" />
+        <MenuItem Header="_Timeline" IsChecked="{Binding IsTimelineVisible}" Command="{Binding ToggleTimelineCommand}" />
         <Separator />
-        <MenuItem Header="Show _Skeleton" IsChecked="True" Command="{Binding ToggleShowSkeletonCommand}" />
-        <MenuItem Header="Show A_rtwork" IsChecked="True" Command="{Binding ToggleShowArtworkCommand}" />
-        <MenuItem Header="Show _Masks" Command="{Binding ToggleShowMasksCommand}" />
-        <MenuItem Header="Show _Guides" IsChecked="True" Command="{Binding ToggleShowGuidesCommand}" />
+        <MenuItem Header="Show _Skeleton" IsChecked="{Binding ShowSkeleton}" Command="{Binding ToggleShowSkeletonCommand}" />
+        <MenuItem Header="Show A_rtwork" IsChecked="{Binding ShowArtwork}" Command="{Binding ToggleShowArtworkCommand}" />
+        <MenuItem Header="Show _Masks" IsChecked="{Binding ShowMasks}" Command="{Binding ToggleShowMasksCommand}" />
+        <MenuItem Header="Show _Guides" IsChecked="{Binding ShowGuides}" Command="{Binding ToggleShowGuidesCommand}" />
         <Separator />
         <MenuItem Header="Workspace">
           <MenuItem Header="Project" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="Project" />
@@ -118,7 +118,7 @@
     </WrapPanel>
 
     <!-- Main Content Area -->
-    <Grid>
+    <Grid x:Name="MainContentGrid">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="250" MinWidth="180" />
         <ColumnDefinition Width="*" />
