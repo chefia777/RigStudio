@@ -157,6 +157,21 @@ public class MainWindowViewModel : ReactiveObject
         ToggleCorrectionModeCommand = ReactiveCommand.Create(ToggleCorrectionMode);
         CancelToolCommand = ReactiveCommand.Create(CancelTool);
         FitViewportCommand = ReactiveCommand.Create(FitViewport);
+        ExitCommand = ReactiveCommand.Create(ExitApp);
+        AboutCommand = ReactiveCommand.Create(ShowAbout);
+        ImportArtworkCommand = ReactiveCommand.CreateFromTask(NewCharacterAsync);
+        PreferencesCommand = ReactiveCommand.Create(ShowPreferences);
+        ProjectSettingsCommand = ReactiveCommand.Create(ShowProjectSettings);
+        NewPartCommand = ReactiveCommand.CreateFromTask(CreateMaskAsync);
+        BakeAnimationCommand = ReactiveCommand.Create(BakeAnimation);
+        NewExportProfileCommand = ReactiveCommand.Create(NewExportProfile);
+        ToggleProjectPanelCommand = ReactiveCommand.Create(ToggleProjectPanel);
+        ToggleInspectorPanelCommand = ReactiveCommand.Create(ToggleInspectorPanel);
+        ToggleTimelineCommand = ReactiveCommand.Create(ToggleTimeline);
+        ToggleShowSkeletonCommand = ReactiveCommand.Create(ToggleShowSkeleton);
+        ToggleShowArtworkCommand = ReactiveCommand.Create(ToggleShowArtwork);
+        ToggleShowMasksCommand = ReactiveCommand.Create(ToggleShowMasks);
+        ToggleShowGuidesCommand = ReactiveCommand.Create(ToggleShowGuides);
         CancelExportCommand = ReactiveCommand.Create(CancelExport, this.WhenAnyValue(x => x.IsExporting));
         AddAnimationEventCommand = ReactiveCommand.CreateFromTask(AddAnimationEventAsync);
         // Autosave timer — ticks every 60 seconds when the project is dirty
@@ -466,6 +481,21 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand FitViewportCommand { get; }
     public ICommand CancelExportCommand { get; }
     public ICommand AddAnimationEventCommand { get; }
+    public ICommand ExitCommand { get; }
+    public ICommand AboutCommand { get; }
+    public ICommand ImportArtworkCommand { get; }
+    public ICommand PreferencesCommand { get; }
+    public ICommand ProjectSettingsCommand { get; }
+    public ICommand NewPartCommand { get; }
+    public ICommand BakeAnimationCommand { get; }
+    public ICommand NewExportProfileCommand { get; }
+    public ICommand ToggleProjectPanelCommand { get; }
+    public ICommand ToggleInspectorPanelCommand { get; }
+    public ICommand ToggleTimelineCommand { get; }
+    public ICommand ToggleShowSkeletonCommand { get; }
+    public ICommand ToggleShowArtworkCommand { get; }
+    public ICommand ToggleShowMasksCommand { get; }
+    public ICommand ToggleShowGuidesCommand { get; }
 
     /// <summary>Title displayed in the window title bar.</summary>
     public string Title
@@ -927,6 +957,65 @@ public class MainWindowViewModel : ReactiveObject
     }
 
     private void FitViewport() => StatusMessage = "Fit viewport.";
+
+    private void ExitApp()
+    {
+        var window = _windowProvider.GetMainWindow();
+        window?.Close();
+    }
+
+    private void ShowAbout() => StatusMessage = "Sprite Rig Studio v0.1.0";
+
+    private void ShowPreferences() => StatusMessage = "Preferences (coming soon).";
+
+    private void ShowProjectSettings() => StatusMessage = "Project settings (coming soon).";
+
+    private void BakeAnimation() => StatusMessage = "Bake animation (coming soon).";
+
+    private void NewExportProfile()
+    {
+        if (_activeProject == null) { StatusMessage = "Open a project first."; return; }
+        var profile = new ExportProfile
+        {
+            ExportProfileId = ExportProfileId.New(),
+            Name = "Default Profile",
+            FrameWidth = 300,
+            FrameHeight = 300,
+            Columns = 4,
+            Rows = 4,
+            FrameRate = 12,
+            BackgroundMode = BackgroundMode.Transparent,
+            SamplingMode = SamplingMode.NearestNeighbor,
+            AnchorPixel = new Vector2D(150, 260),
+            OverflowPolicy = OverflowPolicy.FailExport
+        };
+        _activeProject.ExportProfiles[profile.ExportProfileId.ToKeyString()] = profile;
+        MarkDirty();
+        UpdateProjectPanel();
+        StatusMessage = $"Created export profile: {profile.Name}";
+    }
+
+    private void ToggleProjectPanel() => StatusMessage = "Toggle project panel (coming soon).";
+
+    private void ToggleInspectorPanel() => StatusMessage = "Toggle inspector panel (coming soon).";
+
+    private void ToggleTimeline() => StatusMessage = "Toggle timeline (coming soon).";
+
+    private void ToggleShowSkeleton()
+    {
+        if (_activeCharacter != null) _activeCharacter.PreviewSettings.ShowSkeleton = !_activeCharacter.PreviewSettings.ShowSkeleton;
+        StatusMessage = _activeCharacter?.PreviewSettings.ShowSkeleton == true ? "Skeleton visible" : "Skeleton hidden";
+    }
+
+    private void ToggleShowArtwork() => StatusMessage = "Toggle artwork (coming soon).";
+
+    private void ToggleShowMasks() => StatusMessage = "Toggle masks (coming soon).";
+
+    private void ToggleShowGuides()
+    {
+        _sessionState.ShowGuides = !_sessionState.ShowGuides;
+        StatusMessage = _sessionState.ShowGuides ? "Guides visible" : "Guides hidden";
+    }
 
     private async Task AddAnimationEventAsync()
     {
@@ -1415,4 +1504,6 @@ public class MainWindowViewModel : ReactiveObject
     }
 
 }
+
+
 

@@ -282,6 +282,20 @@ public class ViewportControl : Control
         _toolManager.DispatchKeyDown(this, e);
     }
 
+    // --- Layout ---
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        // Take all available space — without this, a bare Control
+        // measures as (0,0) and collapses star-sized grid columns.
+        return availableSize;
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        return finalSize;
+    }
+
     // --- Rendering ---
 
     public override void Render(DrawingContext context)

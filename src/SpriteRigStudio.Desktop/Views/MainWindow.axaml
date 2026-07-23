@@ -38,23 +38,23 @@
         <MenuItem Header="_Save" Command="{Binding SaveProjectCommand}" />
         <MenuItem Header="Save _As..." Command="{Binding SaveProjectAsCommand}" />
         <Separator />
-        <MenuItem Header="E_xit" />
+        <MenuItem Header="E_xit" Command="{Binding ExitCommand}" />
       </MenuItem>
       <MenuItem Header="_Edit">
         <MenuItem Header="_Undo" Command="{Binding UndoCommand}" />
         <MenuItem Header="_Redo" Command="{Binding RedoCommand}" />
         <Separator />
-        <MenuItem Header="Prefere_nces..." />
+        <MenuItem Header="Prefere_nces..." Command="{Binding PreferencesCommand}" />
       </MenuItem>
       <MenuItem Header="_View">
         <MenuItem Header="_Project Panel" IsChecked="True" />
         <MenuItem Header="_Inspector Panel" IsChecked="True" />
         <MenuItem Header="_Timeline" IsChecked="True" />
         <Separator />
-        <MenuItem Header="Show _Skeleton" IsChecked="True" />
-        <MenuItem Header="Show A_rtwork" IsChecked="True" />
-        <MenuItem Header="Show _Masks" />
-        <MenuItem Header="Show _Guides" IsChecked="True" />
+        <MenuItem Header="Show _Skeleton" IsChecked="True" Command="{Binding ToggleShowSkeletonCommand}" />
+        <MenuItem Header="Show A_rtwork" IsChecked="True" Command="{Binding ToggleShowArtworkCommand}" />
+        <MenuItem Header="Show _Masks" Command="{Binding ToggleShowMasksCommand}" />
+        <MenuItem Header="Show _Guides" IsChecked="True" Command="{Binding ToggleShowGuidesCommand}" />
         <Separator />
         <MenuItem Header="Workspace">
           <MenuItem Header="Project" Command="{Binding SwitchWorkspaceCommand}" CommandParameter="Project" />
@@ -67,8 +67,8 @@
         </MenuItem>
       </MenuItem>
       <MenuItem Header="_Project">
-        <MenuItem Header="Project _Settings..." />
-        <MenuItem Header="_Import Artwork..." />
+        <MenuItem Header="Project _Settings..." Command="{Binding ProjectSettingsCommand}" />
+        <MenuItem Header="_Import Artwork..." Command="{Binding ImportArtworkCommand}" />
       </MenuItem>
       <MenuItem Header="_Rig">
         <MenuItem Header="_New Skeleton..." Command="{Binding AddBoneCommand}" />
@@ -78,7 +78,7 @@
         <Separator />
         <MenuItem Header="_Import Artwork..." Command="{Binding ImportArtworkCommand}" />
         <Separator />
-        <MenuItem Header="New _Part..." />
+        <MenuItem Header="New _Part..." Command="{Binding NewPartCommand}" />
         <MenuItem Header="_Import Separate Part..." Command="{Binding ImportSeparatePartCommand}" />
         <MenuItem Header="Create _Mask..." Command="{Binding CreateMaskCommand}" />
       </MenuItem>
@@ -87,15 +87,15 @@
         <MenuItem Header="Add _Keyframe..." Command="{Binding AddKeyframeCommand}" />
         <MenuItem Header="Edit _Corrections" IsChecked="{Binding IsCorrectionMode}" Command="{Binding ToggleCorrectionModeCommand}" />
         <Separator />
-        <MenuItem Header="_Bake Animation..." />
+        <MenuItem Header="_Bake Animation..." Command="{Binding BakeAnimationCommand}" />
       </MenuItem>
       <MenuItem Header="_Export">
-        <MenuItem Header="New Export _Profile..." />
+        <MenuItem Header="New Export _Profile..." Command="{Binding NewExportProfileCommand}" />
         <MenuItem Header="_Export Animation..." Command="{Binding ExportAnimationCommand}" />
         <MenuItem Header="Export _All..." Command="{Binding ExportAllCommand}" />
       </MenuItem>
       <MenuItem Header="_Help">
-        <MenuItem Header="About Sprite Rig Studio" />
+        <MenuItem Header="About Sprite Rig Studio" Command="{Binding AboutCommand}" />
       </MenuItem>
     </Menu>
 
