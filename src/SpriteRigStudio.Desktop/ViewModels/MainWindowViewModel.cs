@@ -18,6 +18,7 @@ using SpriteRigStudio.Domain.Animations;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Exporting;
 using SpriteRigStudio.Domain.Geometry;
+using SpriteRigStudio.Domain.Transforms;
 using SpriteRigStudio.Domain.Parts;
 using SpriteRigStudio.Domain.Projects;
 using SpriteRigStudio.Domain.Retargeting;
@@ -138,6 +139,9 @@ public class MainWindowViewModel : ReactiveObject
         NextFrameCommand = ReactiveCommand.Create(NextFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
         GoToStartCommand = ReactiveCommand.Create(GoToStart);
         GoToEndCommand = ReactiveCommand.Create(GoToEnd, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
+        NewAnimationCommand = ReactiveCommand.CreateFromTask(NewAnimationAsync);
+        AddBoneCommand = ReactiveCommand.CreateFromTask(AddBoneAsync);
+        ExportDialogCommand = ReactiveCommand.CreateFromTask(ExportDialogAsync);
         // Autosave timer — ticks every 60 seconds when the project is dirty
         _autosaveSubscription = Observable.Interval(TimeSpan.FromSeconds(60))
             .Where(_ => _isDirty && _activeProject != null && !string.IsNullOrEmpty(_activeProject.ProjectDirectory))
@@ -389,6 +393,9 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand NextFrameCommand { get; }
     public ICommand GoToStartCommand { get; }
     public ICommand GoToEndCommand { get; }
+    public ICommand NewAnimationCommand { get; }
+    public ICommand AddBoneCommand { get; }
+    public ICommand ExportDialogCommand { get; }
 
     /// <summary>Title displayed in the window title bar.</summary>
     public string Title
@@ -905,6 +912,68 @@ public class MainWindowViewModel : ReactiveObject
             {
                 StatusMessage = $"Failed: {addResult.ErrorMessage}";
             }
+        }
+    }
+
+    // --- New dialog command implementations ---
+
+    private async Task NewAnimationAsync()
+    {
+        if (_activeProject == null) { StatusMessage = "Open or create a project first."; return; }
+        if (ActiveSkeleton == null) { StatusMessage = "Select a skeleton first."; return; }
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+        var dialog = new NewAnimationDialog();
+        var result = await dialog.ShowDialog<DialogResult>(window);
+        if (result != DialogResult.Ok) return;
+        var anim = _animationService.CreateAnimation(
+            dialog.AnimationName, ActiveSkeleton.SkeletonId, dialog.Fps, dialog.Duration);
+        anim.LoopMode = dialog.LoopMode;
+        _activeProject.Animations[anim.AnimationId.ToKeyString()] = anim;
+        MarkDirty();
+        UpdateProjectPanel();
+        StatusMessage = $"Created animation: {anim.Name}";
+    }
+
+    private async Task AddBoneAsync()
+    {
+        if (ActiveSkeleton == null) { StatusMessage = "Select a skeleton first."; return; }
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+        var dialog = new AddBoneDialog(ActiveSkeleton);
+        var result = await dialog.ShowDialog<DialogResult>(window);
+        if (result != DialogResult.Ok) return;
+        var addResult = _skeletonService.AddBone(
+            ActiveSkeleton, dialog.BoneName, dialog.Role,
+            dialog.ParentBoneId, Transform2D.Identity);
+        if (addResult.IsSuccess)
+        {
+            MarkDirty();
+            UpdateProjectPanel();
+            StatusMessage = $"Added bone: {dialog.BoneName}";
+        }
+        else
+        {
+            StatusMessage = $"Failed: {addResult.ErrorMessage}";
+        }
+    }
+
+    private async Task ExportDialogAsync()
+    {
+        if (_activeProject == null || _activeCharacter == null || _activeAnimation == null)
+        { StatusMessage = "Select a character and animation first."; return; }
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+        var dialog = new ExportDialog(_activeProject.ExportProfiles.Values,
+            _activeCharacter.Name, _activeAnimation.Name);
+        var result = await dialog.ShowDialog<DialogResult>(window);
+        if (result != DialogResult.Ok) return;
+        // Set selected profile and trigger export
+        if (_activeProject.ExportProfiles.TryGetValue(
+            dialog.SelectedProfileId.ToKeyString(), out var profile))
+        {
+            ActiveProfile = profile;
+            await ExportAnimationAsync();
         }
     }
 

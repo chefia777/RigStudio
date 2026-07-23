@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SpriteRigStudio.Desktop.Dialogs.NewAnimationDialog"
+        Title="New Animation Clip" Width="380" Height="280"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="16" Spacing="8">
+    <TextBlock Text="Animation Name" />
+    <TextBox x:Name="NameBox" Watermark="e.g. Idle" />
+
+    <TextBlock Text="FPS" />
+    <NumericUpDown x:Name="FpsBox" Minimum="1" Maximum="120" Value="12" Increment="1" />
+
+    <TextBlock Text="Duration (seconds)" />
+    <TextBox x:Name="DurationBox" Text="1.0" Watermark="e.g. 1.0" />
+
+    <TextBlock Text="Loop Mode" />
+    <ComboBox x:Name="LoopModeCombo" SelectedIndex="0" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button Content="Cancel" Click="OnCancel" />
+      <Button Content="Create" Click="OnCreate" IsDefault="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>

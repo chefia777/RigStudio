@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SpriteRigStudio.Desktop.Dialogs.AddBoneDialog"
+        Title="Add Bone" Width="380" Height="260"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="16" Spacing="8">
+    <TextBlock Text="Bone Name" />
+    <TextBox x:Name="NameBox" Watermark="e.g. UpperArm" />
+
+    <TextBlock Text="Bone Role" />
+    <ComboBox x:Name="RoleCombo" SelectedIndex="0" />
+
+    <TextBlock Text="Parent Bone" />
+    <ComboBox x:Name="ParentBoneCombo" SelectedIndex="0" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button Content="Cancel" Click="OnCancel" />
+      <Button Content="Add Bone" Click="OnAdd" IsDefault="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>

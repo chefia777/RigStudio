@@ -41,7 +41,7 @@
         <MenuItem Header="_Import Artwork..." />
       </MenuItem>
       <MenuItem Header="_Rig">
-        <MenuItem Header="_New Skeleton..." Command="{Binding NewSkeletonCommand}" />
+        <MenuItem Header="_New Skeleton..." Command="{Binding AddBoneCommand}" />
         <MenuItem Header="New _Character Rig..." Command="{Binding NewCharacterCommand}" />
         <MenuItem Header="_Import Artwork..." Command="{Binding ImportArtworkCommand}" />
         <Separator />

@@ -1,0 +1,27 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SpriteRigStudio.Desktop.Dialogs.ExportDialog"
+        Title="Export Animation" Width="400" Height="280"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="16" Spacing="8">
+    <TextBlock Text="Export Settings" FontWeight="Bold" Margin="0,0,0,8" />
+
+    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto">
+      <TextBlock Text="Character" VerticalAlignment="Center" />
+      <TextBox x:Name="CharacterNameBox" Grid.Column="1" IsReadOnly="True" />
+
+      <TextBlock Text="Animation" Grid.Row="1" VerticalAlignment="Center" />
+      <TextBox x:Name="AnimationNameBox" Grid.Row="1" Grid.Column="1" IsReadOnly="True" />
+
+      <TextBlock Text="Export Profile" Grid.Row="2" VerticalAlignment="Center" />
+      <ComboBox x:Name="ProfileCombo" Grid.Row="2" Grid.Column="1" />
+    </Grid>
+
+    <ProgressBar x:Name="ProgressBar" IsVisible="False" Margin="0,8" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button Content="Cancel" Click="OnCancel" />
+      <Button x:Name="ExportButton" Content="Export" Click="OnExport" IsDefault="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>
