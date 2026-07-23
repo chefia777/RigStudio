@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpriteRigStudio.Application</RootNamespace>
+    <AssemblyName>SpriteRigStudio.Application</AssemblyName>
+    <Description>Sprite Rig Studio - Application layer</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpriteRigStudio.Domain\SpriteRigStudio.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

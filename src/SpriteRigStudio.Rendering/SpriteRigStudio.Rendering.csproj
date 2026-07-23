@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpriteRigStudio.Rendering</RootNamespace>
+    <AssemblyName>SpriteRigStudio.Rendering</AssemblyName>
+    <Description>Sprite Rig Studio - Rendering layer</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpriteRigStudio.Domain\SpriteRigStudio.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+</Project>

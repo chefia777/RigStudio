@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpriteRigStudio.Desktop</RootNamespace>
+    <AssemblyName>SpriteRigStudio.Desktop</AssemblyName>
+    <Description>Sprite Rig Studio - Desktop application</Description>
+    <OutputType>WinExe</OutputType>
+    <UseAppHost>true</UseAppHost>
+    <!-- <ApplicationIcon>Assets\app.ico</ApplicationIcon> -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpriteRigStudio.Domain\SpriteRigStudio.Domain.csproj" />
+    <ProjectReference Include="..\SpriteRigStudio.Application\SpriteRigStudio.Application.csproj" />
+    <ProjectReference Include="..\SpriteRigStudio.Rendering\SpriteRigStudio.Rendering.csproj" />
+    <ProjectReference Include="..\SpriteRigStudio.Infrastructure\SpriteRigStudio.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="Avalonia.ReactiveUI" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+</Project>

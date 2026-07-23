@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpriteRigStudio.Cli</RootNamespace>
+    <AssemblyName>SpriteRigStudio.Cli</AssemblyName>
+    <Description>Sprite Rig Studio - Command-line interface</Description>
+    <OutputType>Exe</OutputType>
+    <UseAppHost>true</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpriteRigStudio.Application\SpriteRigStudio.Application.csproj" />
+    <ProjectReference Include="..\SpriteRigStudio.Rendering\SpriteRigStudio.Rendering.csproj" />
+    <ProjectReference Include="..\SpriteRigStudio.Infrastructure\SpriteRigStudio.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" />
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+</Project>

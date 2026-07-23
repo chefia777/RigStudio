@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpriteRigStudio.Domain</RootNamespace>
+    <AssemblyName>SpriteRigStudio.Domain</AssemblyName>
+    <Description>Sprite Rig Studio - Domain layer</Description>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SpriteRigStudio.Desktop.Views.MainWindow"
+        Title="Sprite Rig Studio"
+        Width="1280"
+        Height="800"
+        MinWidth="1024"
+        MinHeight="600">
+  <Grid>
+    <TextBlock Text="Sprite Rig Studio"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               FontSize="24"
+               Foreground="{DynamicResource ThemeForegroundColor}" />
+  </Grid>
+</Window>
