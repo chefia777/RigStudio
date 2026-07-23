@@ -321,8 +321,11 @@
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" VerticalAlignment="Center" />
-        <Separator Grid.Column="1" Width="8" />
-        <TextBlock Grid.Column="2" Text="{Binding ActiveProject.Name}" VerticalAlignment="Center" />
+        <ProgressBar Grid.Column="1" Value="{Binding ExportProgress}"
+                     IsVisible="{Binding IsExporting}"
+                     Width="100" Height="16" Margin="8,0" />
+        <TextBlock Grid.Column="2" Text="{Binding ExportStatus}"
+                   IsVisible="{Binding IsExporting}" VerticalAlignment="Center" />
       </Grid>
     </Border>
   </DockPanel>

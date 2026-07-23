@@ -78,6 +78,12 @@ public class MainWindowViewModel : ReactiveObject
     private IDisposable? _autosaveSubscription;
     private readonly Stack<(string description, Action undo, Action redo)> _undoStack = new();
     private readonly Stack<(string description, Action undo, Action redo)> _redoStack = new();
+    // --- Export state ---
+    private double _exportProgress;
+    private string _exportStatus = "";
+    private bool _isExporting;
+    private CancellationTokenSource? _exportCancellation;
+
     // --- Panel view models ---
 
     private readonly ProjectPanelViewModel _projectPanel;
@@ -151,6 +157,8 @@ public class MainWindowViewModel : ReactiveObject
         ToggleCorrectionModeCommand = ReactiveCommand.Create(ToggleCorrectionMode);
         CancelToolCommand = ReactiveCommand.Create(CancelTool);
         FitViewportCommand = ReactiveCommand.Create(FitViewport);
+        CancelExportCommand = ReactiveCommand.Create(CancelExport, this.WhenAnyValue(x => x.IsExporting));
+        AddAnimationEventCommand = ReactiveCommand.CreateFromTask(AddAnimationEventAsync);
         // Autosave timer — ticks every 60 seconds when the project is dirty
         _autosaveSubscription = Observable.Interval(TimeSpan.FromSeconds(60))
             .Where(_ => _isDirty && _activeProject != null && !string.IsNullOrEmpty(_activeProject.ProjectDirectory))
@@ -374,6 +382,26 @@ public class MainWindowViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isCorrectionMode, value);
     }
 
+    // --- Export state ---
+
+    public double ExportProgress
+    {
+        get => _exportProgress;
+        set => this.RaiseAndSetIfChanged(ref _exportProgress, value);
+    }
+
+    public string ExportStatus
+    {
+        get => _exportStatus;
+        set => this.RaiseAndSetIfChanged(ref _exportStatus, value);
+    }
+
+    public bool IsExporting
+    {
+        get => _isExporting;
+        set => this.RaiseAndSetIfChanged(ref _isExporting, value);
+    }
+
     // --- Panel view models ---
 
     public ProjectPanelViewModel ProjectPanel => _projectPanel;
@@ -421,6 +449,8 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand ToggleCorrectionModeCommand { get; }
     public ICommand CancelToolCommand { get; }
     public ICommand FitViewportCommand { get; }
+    public ICommand CancelExportCommand { get; }
+    public ICommand AddAnimationEventCommand { get; }
 
     /// <summary>Title displayed in the window title bar.</summary>
     public string Title
@@ -710,6 +740,11 @@ public class MainWindowViewModel : ReactiveObject
 
         try
         {
+            IsExporting = true;
+            _exportCancellation = new CancellationTokenSource();
+            ExportProgress = 0;
+            ExportStatus = "Starting export...";
+
             var validation = _exportService.ValidateExport(_activeProject, _activeCharacter, _activeAnimation, _activeProfile);
             if (!validation.IsValid)
             {
@@ -722,8 +757,6 @@ public class MainWindowViewModel : ReactiveObject
                 StatusMessage = "Project must be saved before exporting.";
                 return;
             }
-
-            StatusMessage = $"Exporting animation '{_activeAnimation.Name}'...";
 
             // 1. Get export paths
             var paths = _exportService.GetOutputPaths(
@@ -742,6 +775,7 @@ public class MainWindowViewModel : ReactiveObject
             }
 
             // 3. Decode all images referenced by character parts
+            ExportStatus = "Decoding images...";
             var decodedImages = new Dictionary<string, DecodedImageInfo>();
             foreach (var part in _activeCharacter.SpriteParts.Values)
             {
@@ -755,16 +789,27 @@ public class MainWindowViewModel : ReactiveObject
 
             // 4. Evaluate and render each frame
             var frameCount = _animationService.GetSampledFrameCount(_activeAnimation, _activeProfile.FrameRate);
+            ExportStatus = $"Rendering {frameCount} frames...";
             var frames = new List<byte[]>(frameCount);
             for (int i = 0; i < frameCount; i++)
             {
+                if (_exportCancellation.IsCancellationRequested)
+                {
+                    StatusMessage = "Export cancelled.";
+                    return;
+                }
+
                 var time = _animationService.GetSampleTime(_activeAnimation, i, _activeProfile.FrameRate);
                 var pose = _rigPoseEvaluator.EvaluateAnimationPose(skeleton, _activeCharacter, _activeAnimation, time);
                 var framePixels = _frameRenderer.RenderFrame(pose, _activeCharacter, _activeProfile, decodedImages);
                 frames.Add(framePixels);
+
+                ExportProgress = (double)(i + 1) / frameCount;
+                ExportStatus = $"Rendered frame {i + 1}/{frameCount}";
             }
 
             // 5. Compose spritesheet
+            ExportStatus = "Composing spritesheet...";
             var sheetPixels = _spritesheetComposer.ComposeSpritesheet(
                 frames,
                 _activeProfile.Columns,
@@ -773,6 +818,7 @@ public class MainWindowViewModel : ReactiveObject
                 _activeProfile.FrameHeight);
 
             // 6. Write PNG file
+            ExportStatus = "Writing files...";
             var encodeResult = await _imageEncoder.EncodePngToFileAsync(
                 paths.SpritesheetPath,
                 _activeProfile.SheetWidth,
@@ -825,11 +871,22 @@ public class MainWindowViewModel : ReactiveObject
             var metadataJson = _projectSerializer.Serialize(metadataObj);
             await File.WriteAllTextAsync(paths.MetadataPath, metadataJson);
 
+            ExportStatus = "Export complete.";
             StatusMessage = $"Export complete: {frameCount} frames → {paths.SpritesheetPath}";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Export cancelled.";
         }
         catch (Exception ex)
         {
             StatusMessage = $"Export error: {ex.Message}";
+        }
+        finally
+        {
+            IsExporting = false;
+            _exportCancellation?.Dispose();
+            _exportCancellation = null;
         }
     }
 
@@ -847,7 +904,29 @@ public class MainWindowViewModel : ReactiveObject
 
     private void CancelTool() => StatusMessage = "Operation cancelled.";
 
+    private void CancelExport()
+    {
+        _exportCancellation?.Cancel();
+        ExportStatus = "Cancelling...";
+    }
+
     private void FitViewport() => StatusMessage = "Fit viewport.";
+
+    private async Task AddAnimationEventAsync()
+    {
+        if (_activeAnimation == null) { StatusMessage = "Select an animation."; return; }
+        // For MVP, just add an event at current time
+        var evt = new AnimationEvent
+        {
+            TimeSeconds = _currentTime,
+            Name = "Event",
+            Parameter = null
+        };
+        _activeAnimation.Events.Add(evt);
+        MarkDirty();
+        StatusMessage = $"Added event at {_currentTime:F2}s";
+        await Task.CompletedTask;
+    }
 
     private void SetActiveTool(string toolName)
     {

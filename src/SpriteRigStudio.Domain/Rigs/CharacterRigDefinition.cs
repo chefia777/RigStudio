@@ -43,6 +43,12 @@ public class CharacterRigDefinition
     /// <summary>Per-animation character-specific corrections.</summary>
     public Dictionary<string, CharacterAnimationOverride> CharacterAnimationOverrides { get; init; } = new();
 
+    /// <summary>Preview settings for animation preview.</summary>
+    public PreviewSettings PreviewSettings { get; set; } = new();
+
+    /// <summary>Part-to-bone bindings (additional mapping info).</summary>
+    public Dictionary<string, string> PartBindings { get; init; } = new(StringComparer.Ordinal);
+
     /// <summary>Optional metadata dictionary.</summary>
     public Dictionary<string, string> Metadata { get; init; } = new(StringComparer.Ordinal);
 

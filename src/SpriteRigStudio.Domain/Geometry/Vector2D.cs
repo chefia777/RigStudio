@@ -39,5 +39,8 @@ public readonly record struct Vector2D(double X, double Y)
         return new(X * cos - Y * sin, X * sin + Y * cos);
     }
 
+    /// <summary>Angle of this vector in radians (atan2).</summary>
+    public double Angle() => Math.Atan2(Y, X);
+
     public override string ToString() => $"({X:F2}, {Y:F2})";
 }

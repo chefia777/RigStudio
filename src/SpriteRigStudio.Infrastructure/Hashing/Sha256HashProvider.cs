@@ -26,4 +26,21 @@ public class Sha256HashProvider : IHashProvider
         var combined = string.Join('|', hashes);
         return ComputeHash(combined);
     }
+
+    /// <summary>
+    /// Computes a combined content hash for a character+animation export.
+    /// Used for outdated detection in batch export.
+    /// </summary>
+    public string ComputeExportHash(
+        string skeletonJson,
+        string characterJson,
+        string animationJson,
+        string correctionJson,
+        string profileJson,
+        string renderingVersion)
+    {
+        return ComputeCombinedHash(
+            skeletonJson, characterJson, animationJson,
+            correctionJson, profileJson, renderingVersion);
+    }
 }
