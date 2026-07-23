@@ -303,6 +303,10 @@ public class MainWindowViewModel : ReactiveObject
         if (_activeProject.Animations.TryGetValue(selected.Id.ToKeyString(), out var animation))
         {
             ActiveAnimation = animation;
+            if (_activeProject.Skeletons.TryGetValue(animation.SkeletonId.ToKeyString(), out var skeleton))
+                ActiveSkeleton = skeleton;
+            CurrentTime = Math.Min(CurrentTime, animation.DurationSeconds);
+            EvaluateAnimationPoseAtCurrentTime();
             StatusMessage = $"Selected animation: {animation.Name}";
         }
     }
@@ -405,7 +409,16 @@ public class MainWindowViewModel : ReactiveObject
     public double CurrentTime
     {
         get => _currentTime;
-        set => this.RaiseAndSetIfChanged(ref _currentTime, value);
+        set
+        {
+            var next = _activeAnimation == null
+                ? Math.Max(0, value)
+                : Math.Clamp(value, 0, _activeAnimation.DurationSeconds);
+            if (Math.Abs(_currentTime - next) < 0.000001)
+                return;
+            this.RaiseAndSetIfChanged(ref _currentTime, next);
+            _sessionState.CurrentTimeSeconds = next;
+        }
     }
 
     public bool IsPlaying
@@ -794,6 +807,13 @@ public class MainWindowViewModel : ReactiveObject
         if (_activeProject == null || _activeCharacter == null || _activeAnimation == null) return;
         if (!_activeProject.Skeletons.TryGetValue(_activeCharacter.SkeletonId.ToKeyString(), out var skeleton)) return;
         CurrentPose = _rigPoseEvaluator.EvaluateAnimationPose(skeleton, _activeCharacter, _activeAnimation, _currentTime);
+    }
+
+    /// <summary>Moves the playhead from the timeline and refreshes the evaluated pose.</summary>
+    public void SetCurrentTimeFromTimeline(double time)
+    {
+        CurrentTime = time;
+        EvaluateAnimationPoseAtCurrentTime();
     }
 
     private void ToggleCorrectionMode()
@@ -1299,7 +1319,7 @@ public class MainWindowViewModel : ReactiveObject
         var window = _windowProvider.GetMainWindow();
         if (window == null) return;
 
-        var dialog = new KeyframeEditorDialog();
+        var dialog = new KeyframeEditorDialog(_currentTime);
         var dlgResult = await dialog.ShowDialog<DialogResult>(window);
         if (dlgResult == DialogResult.Ok && dialog.TimeSeconds.HasValue)
         {

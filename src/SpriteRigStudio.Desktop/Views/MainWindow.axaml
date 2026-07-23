@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:SpriteRigStudio.Desktop.ViewModels"
+        xmlns:controls="clr-namespace:SpriteRigStudio.Desktop.Controls"
         xmlns:viewport="clr-namespace:SpriteRigStudio.Desktop.Viewport"
         x:Class="SpriteRigStudio.Desktop.Views.MainWindow"
         Title="{Binding Title}"
@@ -299,13 +300,13 @@
             <TextBlock Text="{Binding CurrentTime}" VerticalAlignment="Center" />
             <TextBlock Text="/" VerticalAlignment="Center" />
             <TextBlock Text="{Binding ActiveAnimationDuration}" VerticalAlignment="Center" />
+            <Separator Width="8" />
+            <Button Content="+ Key" Command="{Binding AddKeyframeCommand}" ToolTip.Tip="Add keyframe at current time" />
           </StackPanel>
 
           <!-- Timeline Track -->
-          <Border DockPanel.Dock="Bottom" Margin="8,0,8,8" BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1">
-            <Canvas Background="{DynamicResource ThemeControlLowBrush}">
-              <!-- Timeline content will be rendered here -->
-            </Canvas>
+          <Border DockPanel.Dock="Bottom" Margin="8,0,8,8" BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1" Height="150">
+            <controls:TimelineControl x:Name="Timeline" />
           </Border>
         </DockPanel>
       </Border>

@@ -14,11 +14,16 @@ public partial class KeyframeEditorDialog : Window
     public double RotationDegrees => double.TryParse(RotBox.Text, out var r) ? r : 0;
     public InterpolationMode Interpolation => (InterpolationMode)InterpCombo.SelectedIndex;
 
-    public KeyframeEditorDialog()
+    public KeyframeEditorDialog() : this(0)
+    {
+    }
+
+    public KeyframeEditorDialog(double initialTime)
     {
         InitializeComponent();
         InterpCombo.ItemsSource = new[] { "Step", "Linear", "Smooth" };
         InterpCombo.SelectedIndex = 1; // Linear
+        TimeBox.Text = initialTime.ToString("F3");
     }
 
     private void OnAdd(object? sender, RoutedEventArgs e)

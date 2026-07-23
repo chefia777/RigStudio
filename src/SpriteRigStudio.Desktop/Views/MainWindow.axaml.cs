@@ -23,6 +23,10 @@ public partial class MainWindow : Window
             {
                 if (args.PropertyName == nameof(MainWindowViewModel.CurrentPose))
                     Viewport.EvaluatedPose = vm.CurrentPose;
+                else if (args.PropertyName == nameof(MainWindowViewModel.ActiveAnimation) ||
+                         args.PropertyName == nameof(MainWindowViewModel.ActiveSkeleton) ||
+                         args.PropertyName == nameof(MainWindowViewModel.CurrentTime))
+                    SyncTimelineFromViewModel(vm);
                 else if (args.PropertyName == nameof(MainWindowViewModel.IsProjectPanelVisible) ||
                          args.PropertyName == nameof(MainWindowViewModel.IsInspectorPanelVisible) ||
                          args.PropertyName == nameof(MainWindowViewModel.IsTimelineVisible))
@@ -51,6 +55,15 @@ public partial class MainWindow : Window
             {
                 vm.SelectBone(boneId);
                 SyncViewportFromViewModel(vm);
+                SyncTimelineFromViewModel(vm);
+            };
+
+            Timeline.TimeChanged += vm.SetCurrentTimeFromTimeline;
+            Timeline.BoneSelected += boneId =>
+            {
+                vm.SelectBone(boneId);
+                SyncViewportFromViewModel(vm);
+                SyncTimelineFromViewModel(vm);
             };
 
             // ── Sync viewport state when active character changes ──
@@ -59,6 +72,7 @@ public partial class MainWindow : Window
                 if (args.PropertyName == nameof(MainWindowViewModel.ActiveCharacter))
                 {
                     SyncViewportFromViewModel(vm);
+                    SyncTimelineFromViewModel(vm);
                     LoadArtworkForViewport(vm);
                 }
                 else if (args.PropertyName == nameof(MainWindowViewModel.ActiveTool) ||
@@ -73,6 +87,7 @@ public partial class MainWindow : Window
 
             // Initial sync
             SyncViewportFromViewModel(vm);
+            SyncTimelineFromViewModel(vm);
             ApplyPanelLayout(vm);
             LoadArtworkForViewport(vm);
         }
@@ -120,7 +135,15 @@ public partial class MainWindow : Window
     {
         MainContentGrid.ColumnDefinitions[0].Width = vm.IsProjectPanelVisible ? new GridLength(250) : new GridLength(0);
         MainContentGrid.ColumnDefinitions[2].Width = vm.IsInspectorPanelVisible ? new GridLength(280) : new GridLength(0);
-        MainContentGrid.RowDefinitions[1].Height = vm.IsTimelineVisible ? new GridLength(80) : new GridLength(0);
+        MainContentGrid.RowDefinitions[1].Height = vm.IsTimelineVisible ? new GridLength(180) : new GridLength(0);
+    }
+
+    private void SyncTimelineFromViewModel(MainWindowViewModel vm)
+    {
+        Timeline.Animation = vm.ActiveAnimation;
+        Timeline.Skeleton = vm.ActiveSkeleton;
+        Timeline.CurrentTime = vm.CurrentTime;
+        Timeline.SelectedBoneId = vm.SessionState.SelectedBoneIds.FirstOrDefault();
     }
 
     /// <summary>
