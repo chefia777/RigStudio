@@ -24,12 +24,37 @@ Sprite Rig Studio lets you:
 - Windows 10 or later (64-bit)
 - No game engine, runtime, or development tools required
 
-## Quick Start
+## Quick Start (from source)
+
+```powershell
+# Run the desktop application:
+dotnet run --project src\SpriteRigStudio.Desktop
+
+# Run the CLI:
+dotnet run --project src\SpriteRigStudio.Cli
+```
+
+## Quick Start (from release)
 
 1. Download the latest release from the Releases page.
 2. Extract the archive to a folder of your choice.
 3. Run `SpriteRigStudio.exe`.
 4. Create a new project and start rigging!
+
+## CLI Usage
+
+```powershell
+SpriteRigStudio.Cli validate "path\to\project"
+SpriteRigStudio.Cli export "path\to\project" --profile "4x4 300"
+SpriteRigStudio.Cli export-animation "path\to\project" --character "Hero" --animation "idle"
+SpriteRigStudio.Cli list-characters "path\to\project"
+```
+
+Exit codes: 0=success, 1=validation failure, 2=load failure, 3=export failure, 4=invalid args, 5=unexpected.
+
+## Sample Project
+
+A sample project with a 64x64 pixel art character is in `samples/BasicHumanoid/`.
 
 ## Documentation
 
