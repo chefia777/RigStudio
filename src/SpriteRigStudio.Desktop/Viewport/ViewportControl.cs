@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -20,7 +21,7 @@ namespace SpriteRigStudio.Desktop.Viewport;
 /// Uses Avalonia DrawingContext for rendering. SkiaSharp is used only in the
 /// Rendering layer for export and mask rasterization.
 /// </summary>
-public class ViewportControl : Control
+public class ViewportControl : TemplatedControl
 {
     private readonly ToolManager _toolManager;
     private bool _isPanning;
@@ -196,6 +197,7 @@ public class ViewportControl : Control
         ClipToBounds = true;
         HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+        Background = Brushes.DimGray;
     }
 
     public Point ScreenToWorld(Point screen)
@@ -289,8 +291,6 @@ public class ViewportControl : Control
         base.Render(context);
         var bounds = Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
-
-        context.FillRectangle(Brushes.DimGray, bounds);
 
         using (context.PushTransform(Matrix.CreateTranslation(bounds.Width / 2 + _panX, bounds.Height / 2 + _panY)))
         using (context.PushTransform(Matrix.CreateScale(_zoom, -_zoom)))
