@@ -39,11 +39,15 @@ public partial class MainWindow : Window
             vm.PropertyChanged += (s, args) =>
             {
                 if (args.PropertyName == nameof(MainWindowViewModel.ActiveCharacter))
+                {
                     SyncViewportFromViewModel(vm);
+                    LoadArtworkForViewport(vm);
+                }
             };
 
             // Initial sync
             SyncViewportFromViewModel(vm);
+            LoadArtworkForViewport(vm);
         }
     }
 
@@ -60,6 +64,25 @@ public partial class MainWindow : Window
         else
         {
             Viewport.CurrentSetupTransform = null;
+        }
+    }
+
+    /// <summary>
+    /// Loads the active character's source artwork into the viewport, or clears it if none.
+    /// </summary>
+    private void LoadArtworkForViewport(MainWindowViewModel vm)
+    {
+        var character = vm.ActiveCharacter;
+        var project = vm.ActiveProject;
+
+        if (character?.SourceArtwork != null && project?.ProjectDirectory != null)
+        {
+            var path = System.IO.Path.Combine(project.ProjectDirectory, character.SourceArtwork);
+            Viewport.LoadArtwork(path);
+        }
+        else
+        {
+            Viewport.LoadArtwork(null);
         }
     }
 }

@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SpriteRigStudio.Desktop.Dialogs.NewCharacterDialog"
+        Title="New Character Rig" Width="450" Height="300"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="20" Spacing="12">
+    <TextBlock Text="Character Name" />
+    <TextBox x:Name="NameBox" Watermark="e.g. Frost Knight" />
+    <TextBlock Text="Skeleton" />
+    <ComboBox x:Name="SkeletonCombo" />
+    <TextBlock Text="Source Artwork" />
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBox x:Name="ArtworkPathBox" IsReadOnly="True" Watermark="Select a PNG file..." />
+      <Button Grid.Column="1" Content="Browse..." Click="OnBrowseArtwork" Margin="8,0,0,0" />
+    </Grid>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Cancel" Click="OnCancel" />
+      <Button Content="Create" Click="OnCreate" IsDefault="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>

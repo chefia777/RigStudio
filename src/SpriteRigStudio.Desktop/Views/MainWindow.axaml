@@ -41,13 +41,17 @@
         <MenuItem Header="_Import Artwork..." />
       </MenuItem>
       <MenuItem Header="_Rig">
-        <MenuItem Header="_New Skeleton..." />
-        <MenuItem Header="New _Character Rig..." />
+        <MenuItem Header="_New Skeleton..." Command="{Binding NewSkeletonCommand}" />
+        <MenuItem Header="New _Character Rig..." Command="{Binding NewCharacterCommand}" />
+        <MenuItem Header="_Import Artwork..." Command="{Binding ImportArtworkCommand}" />
+        <Separator />
         <MenuItem Header="New _Part..." />
-        <MenuItem Header="_Auto-Rig..." />
+        <MenuItem Header="Create _Mask..." Command="{Binding CreateMaskCommand}" />
       </MenuItem>
       <MenuItem Header="_Animation">
-        <MenuItem Header="New _Animation Clip..." />
+        <MenuItem Header="New _Animation Clip..." Command="{Binding NewAnimationCommand}" />
+        <MenuItem Header="Add _Keyframe..." Command="{Binding AddKeyframeCommand}" />
+        <Separator />
         <MenuItem Header="_Bake Animation..." />
       </MenuItem>
       <MenuItem Header="_Export">

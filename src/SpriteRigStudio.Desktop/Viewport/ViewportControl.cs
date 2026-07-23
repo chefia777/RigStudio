@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using SpriteRigStudio.Desktop.Tools;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Geometry;
@@ -116,6 +118,25 @@ public class ViewportControl : Control
     public bool ShowSkeleton { get => _showSkeleton; set { _showSkeleton = value; InvalidateVisual(); } }
     public EvaluatedPose? EvaluatedPose { get => _evaluatedPose; set { _evaluatedPose = value; InvalidateVisual(); } }
     public string ActiveTool { get => _activeTool; set => _activeTool = value; }
+
+    // ── Artwork rendering ─────────────────────────────────────────
+
+    private Bitmap? _artworkBitmap;
+
+    /// <summary>
+    /// Loads a character artwork PNG and displays it centered in the viewport.
+    /// Pass null or an empty string to clear the artwork.
+    /// </summary>
+    public void LoadArtwork(string? filePath)
+    {
+        _artworkBitmap?.Dispose();
+        _artworkBitmap = null;
+
+        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+            _artworkBitmap = new Bitmap(filePath);
+
+        InvalidateVisual();
+    }
 
     /// <summary>Gets the screen position of the currently selected joint (simplified placeholder).</summary>
     public Point? GetSelectedJointScreenPosition() => null;
@@ -281,6 +302,9 @@ public class ViewportControl : Control
                                    Math.Abs(_activeRotation) > 0.001 ||
                                    Math.Abs(_activeScale - 1.0) > 0.001;
 
+            // Draw artwork first (background layer)
+            DrawArtwork(context);
+
             if (hasVisualOffset)
             {
                 // Order: translate, rotate, scale (TRS) — applied right-to-left
@@ -334,5 +358,17 @@ public class ViewportControl : Control
                 context.DrawLine(bonePen, new Point(parentX, parentY), new Point(x, y));
             }
         }
+    }
+
+    private void DrawArtwork(DrawingContext context)
+    {
+        if (_artworkBitmap == null) return;
+
+        var srcRect = new Rect(0, 0, _artworkBitmap.Size.Width, _artworkBitmap.Size.Height);
+        var halfW = _artworkBitmap.Size.Width / 2.0;
+        var halfH = _artworkBitmap.Size.Height / 2.0;
+        var destRect = new Rect(-halfW, -halfH, _artworkBitmap.Size.Width, _artworkBitmap.Size.Height);
+
+        context.DrawImage(_artworkBitmap, srcRect, destRect);
     }
 }

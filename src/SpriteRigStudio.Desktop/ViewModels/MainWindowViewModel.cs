@@ -7,15 +7,18 @@ using Avalonia.Platform.Storage;
 using ReactiveUI;
 using SpriteRigStudio.Application.Abstractions;
 using SpriteRigStudio.Application.Animations;
+using SpriteRigStudio.Application.Masks;
 using SpriteRigStudio.Application.Exporting;
 using SpriteRigStudio.Application.Projects;
 using SpriteRigStudio.Application.Rigs;
 using SpriteRigStudio.Application.Skeletons;
+using SpriteRigStudio.Desktop.Dialogs;
 using SpriteRigStudio.Desktop.Platform;
 using SpriteRigStudio.Domain.Animations;
 using SpriteRigStudio.Domain.Common;
 using SpriteRigStudio.Domain.Exporting;
 using SpriteRigStudio.Domain.Geometry;
+using SpriteRigStudio.Domain.Parts;
 using SpriteRigStudio.Domain.Projects;
 using SpriteRigStudio.Domain.Retargeting;
 using SpriteRigStudio.Domain.Rigs;
@@ -47,6 +50,7 @@ public class MainWindowViewModel : ReactiveObject
     private readonly IImageDecoder _imageDecoder;
     private readonly ProjectSerializer _projectSerializer;
     private readonly IProjectRepository _projectRepository;
+    private readonly MaskService _maskService;
 
     // --- Active workspace ---
     private string _activeWorkspace = "Project";
@@ -90,7 +94,8 @@ public class MainWindowViewModel : ReactiveObject
         IImageEncoder imageEncoder,
         IImageDecoder imageDecoder,
         ProjectSerializer projectSerializer,
-        IProjectRepository projectRepository)
+        IProjectRepository projectRepository,
+        MaskService maskService)
     {
         _projectService = projectService;
         _skeletonService = skeletonService;
@@ -105,6 +110,7 @@ public class MainWindowViewModel : ReactiveObject
         _imageDecoder = imageDecoder;
         _projectSerializer = projectSerializer;
         _projectRepository = projectRepository;
+        _maskService = maskService;
 
         _projectPanel = new ProjectPanelViewModel();
         _inspector = new InspectorViewModel();
@@ -125,11 +131,13 @@ public class MainWindowViewModel : ReactiveObject
         ExportAllCommand = ReactiveCommand.CreateFromTask(ExportAllAsync);
         SwitchWorkspaceCommand = ReactiveCommand.Create<string>(SwitchWorkspace);
         SetActiveToolCommand = ReactiveCommand.Create<string>(SetActiveTool);
+        NewCharacterCommand = ReactiveCommand.CreateFromTask(NewCharacterAsync);
+        CreateMaskCommand = ReactiveCommand.CreateFromTask(CreateMaskAsync);
+        AddKeyframeCommand = ReactiveCommand.CreateFromTask(AddKeyframeAsync);
         PreviousFrameCommand = ReactiveCommand.Create(PreviousFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
         NextFrameCommand = ReactiveCommand.Create(NextFrame, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
         GoToStartCommand = ReactiveCommand.Create(GoToStart);
         GoToEndCommand = ReactiveCommand.Create(GoToEnd, this.WhenAnyValue(x => x.ActiveAnimation).Select(a => a != null));
-
         // Autosave timer — ticks every 60 seconds when the project is dirty
         _autosaveSubscription = Observable.Interval(TimeSpan.FromSeconds(60))
             .Where(_ => _isDirty && _activeProject != null && !string.IsNullOrEmpty(_activeProject.ProjectDirectory))
@@ -374,6 +382,9 @@ public class MainWindowViewModel : ReactiveObject
     public ICommand ExportAllCommand { get; }
     public ICommand SwitchWorkspaceCommand { get; }
     public ICommand SetActiveToolCommand { get; }
+    public ICommand NewCharacterCommand { get; }
+    public ICommand CreateMaskCommand { get; }
+    public ICommand AddKeyframeCommand { get; }
     public ICommand PreviousFrameCommand { get; }
     public ICommand NextFrameCommand { get; }
     public ICommand GoToStartCommand { get; }
@@ -765,6 +776,136 @@ public class MainWindowViewModel : ReactiveObject
     {
         ActiveTool = toolName;
         StatusMessage = $"Tool: {toolName}";
+    }
+
+    private async Task NewCharacterAsync()
+    {
+        if (_activeProject == null) return;
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+
+        var skeletons = _projectPanel.Skeletons.ToList();
+        if (skeletons.Count == 0)
+        {
+            StatusMessage = "No skeletons available. Create a skeleton first.";
+            return;
+        }
+
+        var dialog = new NewCharacterDialog(skeletons) { DataContext = this };
+        var result = await dialog.ShowDialog<DialogResult>(window);
+        if (result != DialogResult.Ok) return;
+
+        var name = dialog.CharacterName!;
+        var skeletonId = dialog.SelectedSkeletonId!.Value;
+        var artworkPath = dialog.ArtworkPath;
+
+        // Copy artwork into project if selected
+        string? artworkRef = null;
+        if (!string.IsNullOrEmpty(artworkPath) && File.Exists(artworkPath))
+        {
+            var sourcesDir = System.IO.Path.Combine(_activeProject.ProjectDirectory!, "Sources");
+            Directory.CreateDirectory(sourcesDir);
+            var fileName = $"{name.ToLowerInvariant().Replace(' ', '_')}.png";
+            var destPath = System.IO.Path.Combine(sourcesDir, fileName);
+            File.Copy(artworkPath, destPath, overwrite: true);
+            artworkRef = $"Sources/{fileName}";
+        }
+
+        var character = _rigService.CreateCharacterRig(name, skeletonId, artworkRef);
+        _activeProject.CharacterRigs[character.CharacterRigId.ToKeyString()] = character;
+
+        // Add a default part bound to root bone
+        if (artworkRef != null && _activeProject.Skeletons.TryGetValue(skeletonId.ToKeyString(), out var skeleton))
+        {
+            var rootBone = skeleton.GetRootBone();
+            if (rootBone != null)
+                _rigService.CreatePart(character, "body", rootBone.BoneId, Vector2D.Zero, SourceType.FlattenedImageMask, artworkRef);
+        }
+
+        MarkDirty();
+        UpdateProjectPanel();
+
+        // Select the newly created character in the panel
+        var newItem = _projectPanel.Characters.FirstOrDefault(c => c.Id == character.CharacterRigId);
+        if (newItem != null)
+            _projectPanel.SelectedCharacter = newItem;
+
+        OnSelectedCharacterChanged();
+        StatusMessage = $"Created character: {name}";
+    }
+
+    private async Task CreateMaskAsync()
+    {
+        if (_activeProject == null || _activeCharacter == null)
+        {
+            StatusMessage = "Select a character first.";
+            return;
+        }
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+
+        var artworkPath = _activeCharacter.SourceArtwork != null
+            ? System.IO.Path.Combine(_activeProject.ProjectDirectory!, _activeCharacter.SourceArtwork)
+            : null;
+
+        if (artworkPath == null || !File.Exists(artworkPath))
+        {
+            StatusMessage = "Character has no source artwork to mask. Import artwork first.";
+            return;
+        }
+
+        var dialog = new MaskEditorDialog(artworkPath);
+        var result = await dialog.ShowDialog<DialogResult>(window);
+        if (result == DialogResult.Ok && dialog.IsValid)
+        {
+            var mask = _maskService.CreateMask(dialog.MaskName);
+            foreach (var v in dialog.OuterContour)
+                _maskService.AddVertex(mask, v);
+            _activeCharacter.Masks[mask.MaskId.ToString("N")] = mask;
+            MarkDirty();
+            StatusMessage = $"Created mask '{mask.Name}' with {mask.VertexCount} vertices.";
+        }
+    }
+
+    private async Task AddKeyframeAsync()
+    {
+        if (_activeProject == null || _activeCharacter == null || _activeAnimation == null)
+        {
+            StatusMessage = "Select a character and animation first.";
+            return;
+        }
+        var selectedBoneId = _sessionState.SelectedBoneIds.FirstOrDefault();
+        if (selectedBoneId == BoneId.Empty)
+        {
+            StatusMessage = "Select a bone first.";
+            return;
+        }
+        var window = _windowProvider.GetMainWindow();
+        if (window == null) return;
+
+        var dialog = new KeyframeEditorDialog();
+        var dlgResult = await dialog.ShowDialog<DialogResult>(window);
+        if (dlgResult == DialogResult.Ok && dialog.TimeSeconds.HasValue)
+        {
+            var keyframe = new TransformKeyframe
+            {
+                TimeSeconds = dialog.TimeSeconds.Value,
+                Position = new Vector2D(dialog.PositionX, dialog.PositionY),
+                RotationDegrees = dialog.RotationDegrees,
+                Scale = new Vector2D(1, 1),
+                Interpolation = dialog.Interpolation
+            };
+            var addResult = _animationService.AddKeyframe(_activeAnimation, selectedBoneId, keyframe);
+            if (addResult.IsSuccess)
+            {
+                MarkDirty();
+                StatusMessage = $"Added keyframe at {keyframe.TimeSeconds:F2}s.";
+            }
+            else
+            {
+                StatusMessage = $"Failed: {addResult.ErrorMessage}";
+            }
+        }
     }
 
     // --- Helpers ---
